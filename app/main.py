@@ -23,7 +23,7 @@ from app.database import engine
 
 # Make the beckn-protocol package importable
 _proto_path = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "..", "..", "..", "packages", "beckn-protocol")
+    os.path.join(os.path.dirname(__file__), "..", "packages", "beckn-protocol")
 )
 if _proto_path not in sys.path:
     sys.path.insert(0, _proto_path)
@@ -90,15 +90,21 @@ async def lifespan(app: FastAPI):
     logger.info("Starting %s v%s", settings.APP_NAME, settings.APP_VERSION)
 
     # Optionally create tables (use Alembic in production)
-    from app.models import Base
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    try:
+        from app.models import Base
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+    except Exception:
+        logger.warning("Could not connect to database (skipping table creation)", exc_info=True)
 
     await _register_with_registry()
 
     yield
 
-    await engine.dispose()
+    try:
+        await engine.dispose()
+    except Exception:
+        pass
     logger.info("Shutdown complete")
 
 

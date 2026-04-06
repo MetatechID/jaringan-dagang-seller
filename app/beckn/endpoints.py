@@ -15,14 +15,14 @@ import os
 import sys
 from typing import Any
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Request
+from fastapi import APIRouter, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import async_session_factory, get_db
 
 # Make the beckn-protocol package importable
 _proto_path = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "packages", "beckn-protocol")
+    os.path.join(os.path.dirname(__file__), "..", "..", "packages", "beckn-protocol")
 )
 if _proto_path not in sys.path:
     sys.path.insert(0, _proto_path)
@@ -113,7 +113,6 @@ def _make_beckn_endpoint(action: str, handler):
 
     async def endpoint(
         request: Request,
-        background_tasks: BackgroundTasks,
     ):
         try:
             body = await request.json()
@@ -125,8 +124,8 @@ def _make_beckn_endpoint(action: str, handler):
         context_dict = beckn_req.context.model_dump(mode="json")
         message_dict = beckn_req.message
 
-        background_tasks.add_task(
-            _process_and_callback,
+        # Run processing inline (required for Vercel serverless — no background tasks)
+        await _process_and_callback(
             action,
             handler,
             context_dict,

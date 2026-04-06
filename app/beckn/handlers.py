@@ -29,7 +29,7 @@ from app.services import catalog_service, order_service, payment_service
 
 # Make the beckn-protocol package importable
 _proto_path = os.path.abspath(
-    os.path.join(os.path.dirname(__file__), "..", "..", "..", "..", "packages", "beckn-protocol")
+    os.path.join(os.path.dirname(__file__), "..", "..", "packages", "beckn-protocol")
 )
 if _proto_path not in sys.path:
     sys.path.insert(0, _proto_path)

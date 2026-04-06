@@ -43,3 +43,5 @@ beckn_keys/
 .coverage
 htmlcov/
 .pytest_cache/
+.vercel
+.env*.local
