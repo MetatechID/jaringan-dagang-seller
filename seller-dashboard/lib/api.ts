@@ -19,19 +19,41 @@ async function request<T>(
 
 // -- Store ID resolution ------------------------------------------------
 
-let _storeIdPromise: Promise<string> | null = null;
+const STORE_ID_KEY = "jd_selected_store_id";
 
 /**
- * Resolve the current store's ID by fetching /api/store.
- * The BPP products and orders endpoints filter by store_id, so we need
- * the real ID rather than relying on the server's hardcoded default.
+ * Get the selected store ID from localStorage, falling back to the API.
  * Uses a shared promise so concurrent callers don't trigger duplicate requests.
  */
-async function getStoreId(): Promise<string> {
+let _storeIdPromise: Promise<string> | null = null;
+
+function getStoreId(): Promise<string> {
   if (!_storeIdPromise) {
-    _storeIdPromise = fetchStore().then((s) => s.id);
+    _storeIdPromise = (async () => {
+      if (typeof window !== "undefined") {
+        const stored = localStorage.getItem(STORE_ID_KEY);
+        if (stored) return stored;
+      }
+      const s = await fetchStore();
+      if (typeof window !== "undefined") {
+        localStorage.setItem(STORE_ID_KEY, s.id);
+      }
+      return s.id;
+    })();
   }
   return _storeIdPromise;
+}
+
+export function getSelectedStoreId(): string | null {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem(STORE_ID_KEY);
+}
+
+export function setSelectedStoreId(id: string): void {
+  if (typeof window === "undefined") return;
+  localStorage.setItem(STORE_ID_KEY, id);
+  // Reset the cached promise so next API calls use the new store
+  _storeIdPromise = null;
 }
 
 // -- Products ---------------------------------------------------------
@@ -194,15 +216,24 @@ export interface StoreSettings {
   updated_at: string | null;
 }
 
-export async function fetchStore(): Promise<StoreSettings> {
-  const res = await request<{ data: StoreSettings }>("/store");
+export async function fetchStores(): Promise<StoreSettings[]> {
+  const res = await request<{ data: StoreSettings[] }>("/stores");
+  return res.data;
+}
+
+export async function fetchStore(storeId?: string): Promise<StoreSettings> {
+  const id = storeId || getSelectedStoreId();
+  const query = id ? `?store_id=${id}` : "";
+  const res = await request<{ data: StoreSettings }>(`/store${query}`);
   return res.data;
 }
 
 export async function updateStore(
   body: Record<string, unknown>
 ): Promise<StoreSettings> {
-  const res = await request<{ data: StoreSettings }>("/store", {
+  const id = getSelectedStoreId();
+  const query = id ? `?store_id=${id}` : "";
+  const res = await request<{ data: StoreSettings }>(`/store${query}`, {
     method: "PUT",
     body: JSON.stringify(body),
   });

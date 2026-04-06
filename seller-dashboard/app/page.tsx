@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { fetchProducts, fetchOrders, type Product, type Order } from "@/lib/api";
+import { fetchProducts, fetchOrders, fetchStore, type Product, type Order } from "@/lib/api";
 import { formatIDR, formatRelative } from "@/lib/format";
 import StatusBadge from "@/components/StatusBadge";
 import LoadingSpinner from "@/components/LoadingSpinner";
@@ -10,15 +10,17 @@ import LoadingSpinner from "@/components/LoadingSpinner";
 export default function DashboardPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
+  const [storeName, setStoreName] = useState("Seller Dashboard");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     async function load() {
       try {
-        const [p, o] = await Promise.all([fetchProducts(), fetchOrders()]);
+        const [p, o, s] = await Promise.all([fetchProducts(), fetchOrders(), fetchStore()]);
         setProducts(p);
         setOrders(o);
+        setStoreName(s.name);
       } catch (e) {
         setError(e instanceof Error ? e.message : "Failed to load data");
       } finally {
@@ -99,7 +101,7 @@ export default function DashboardPage() {
       {/* Welcome header */}
       <div>
         <h2 className="text-2xl font-bold text-gray-900">
-          Matchamu Seller Dashboard
+          {storeName} Seller Dashboard
         </h2>
         <p className="mt-1 text-sm text-gray-500">
           Manage your products, orders, and store on the open commerce network.

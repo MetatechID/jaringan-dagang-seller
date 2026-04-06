@@ -4,7 +4,7 @@ import Sidebar from "@/components/Sidebar";
 import TopBar from "@/components/TopBar";
 
 export const metadata: Metadata = {
-  title: "Matchamu Seller Dashboard",
+  title: "Seller Dashboard | Jaringan Dagang",
   description: "Manage your store on Jaringan Dagang open commerce network",
 };
 

@@ -14,6 +14,7 @@ from app.database import get_db
 from app.models.store import Store
 
 router = APIRouter(prefix="/store", tags=["store"])
+stores_router = APIRouter(prefix="/stores", tags=["store"])
 
 
 class StoreUpdate(BaseModel):
@@ -25,14 +26,32 @@ class StoreUpdate(BaseModel):
     status: str | None = None
 
 
-@router.get("")
-async def get_store(
+@stores_router.get("")
+async def list_stores(
     db: AsyncSession = Depends(get_db),
 ):
-    """Get the current store settings (first active store)."""
+    """List all active stores."""
     result = await db.execute(
-        select(Store).where(Store.status == "active").limit(1)
+        select(Store).where(Store.status == "active").order_by(Store.name)
     )
+    stores = result.scalars().all()
+    return {"data": [_serialize(s) for s in stores]}
+
+
+@router.get("")
+async def get_store(
+    store_id: str | None = None,
+    db: AsyncSession = Depends(get_db),
+):
+    """Get store settings by ID, or the first active store if no ID given."""
+    if store_id:
+        result = await db.execute(
+            select(Store).where(Store.id == uuid.UUID(store_id))
+        )
+    else:
+        result = await db.execute(
+            select(Store).where(Store.status == "active").limit(1)
+        )
     store = result.scalar_one_or_none()
     if store is None:
         raise HTTPException(status_code=404, detail="No active store found")
@@ -42,12 +61,18 @@ async def get_store(
 @router.put("")
 async def update_store(
     body: StoreUpdate,
+    store_id: str | None = None,
     db: AsyncSession = Depends(get_db),
 ):
     """Update store settings."""
-    result = await db.execute(
-        select(Store).where(Store.status == "active").limit(1)
-    )
+    if store_id:
+        result = await db.execute(
+            select(Store).where(Store.id == uuid.UUID(store_id))
+        )
+    else:
+        result = await db.execute(
+            select(Store).where(Store.status == "active").limit(1)
+        )
     store = result.scalar_one_or_none()
     if store is None:
         raise HTTPException(status_code=404, detail="No active store found")

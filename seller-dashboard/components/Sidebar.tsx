@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
+import StoreSwitcher from "@/components/StoreSwitcher";
 
 const NAV_ITEMS = [
   {
@@ -80,18 +81,14 @@ export default function Sidebar() {
           mobileOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
-        {/* Logo area */}
-        <div className="flex h-16 items-center gap-3 px-6 border-b border-white/[0.06]">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-brand-600 text-white font-bold text-sm">
-            M
-          </div>
-          <div>
-            <p className="text-sm font-bold text-white leading-tight">Matchamu</p>
-            <p className="text-[11px] text-gray-400 leading-tight">Seller Dashboard</p>
+        {/* Store switcher */}
+        <div className="flex items-center gap-2 px-3 py-3 border-b border-white/[0.06]">
+          <div className="flex-1 min-w-0">
+            <StoreSwitcher />
           </div>
           <button
             onClick={() => setMobileOpen(false)}
-            className="ml-auto rounded-lg p-1 text-gray-400 hover:text-white lg:hidden"
+            className="rounded-lg p-1 text-gray-400 hover:text-white lg:hidden shrink-0"
           >
             <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" d="M6 18 18 6M6 6l12 12" />
