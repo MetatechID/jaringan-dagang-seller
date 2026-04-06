@@ -58,7 +58,7 @@ PRODUCTS = [
             {"variant_name": "Size", "variant_value": "100g Jar", "sku_code": "MTCH-PURE-100", "price": 101750, "stock": 150, "weight_grams": 150},
             {"variant_name": "Size", "variant_value": "250g", "sku_code": "MTCH-PURE-250", "price": 225000, "stock": 80, "weight_grams": 300},
         ],
-        "image_url": "https://images.tokopedia.net/img/cache/500-square/VqbcmM/2024/1/4/pure-matcha-jar.jpg",
+        "image_url": "https://matchamu.com/wp-content/uploads/2023/03/pure-matcha.png",
         "attributes": {"origin": "Uji, Kyoto, Japan", "type": "Ceremonial Grade", "bpom": "MD registered", "halal": True},
     },
     {
@@ -68,7 +68,7 @@ PRODUCTS = [
         "skus": [
             {"variant_name": "Size", "variant_value": "Jar", "sku_code": "MTCH-LATTE-JAR", "price": 79750, "stock": 200, "weight_grams": 350},
         ],
-        "image_url": "https://images.tokopedia.net/img/cache/500-square/VqbcmM/2024/1/4/matcha-latte-jar.jpg",
+        "image_url": "https://matchamu.com/wp-content/uploads/2023/03/matcha-latte-1.png",
         "attributes": {"sweetener": "Gula Aren", "dairy_free": True, "halal": True},
     },
     {
@@ -78,7 +78,7 @@ PRODUCTS = [
         "skus": [
             {"variant_name": "Pack", "variant_value": "Box 20 sachet", "sku_code": "MTCH-LATTE-B20", "price": 101200, "stock": 300, "weight_grams": 500},
         ],
-        "image_url": "https://images.tokopedia.net/img/cache/500-square/VqbcmM/2024/1/4/matcha-latte-box20.jpg",
+        "image_url": "https://matchamu.com/wp-content/uploads/2023/03/2-Matcha-Latte-Box-20.png",
         "attributes": {"sachet_count": 20, "per_sachet_gram": 24, "halal": True},
     },
     {
@@ -88,7 +88,7 @@ PRODUCTS = [
         "skus": [
             {"variant_name": "Pack", "variant_value": "Box 3 sachet", "sku_code": "MTCH-LATTE-B3", "price": 15620, "stock": 500, "weight_grams": 100},
         ],
-        "image_url": "https://images.tokopedia.net/img/cache/500-square/VqbcmM/2024/1/4/matcha-latte-box3.jpg",
+        "image_url": "https://matchamu.com/wp-content/uploads/2023/03/3-Matcha-Latte-Box-3.png",
         "attributes": {"sachet_count": 3, "per_sachet_gram": 24, "halal": True},
     },
     {
@@ -98,7 +98,7 @@ PRODUCTS = [
         "skus": [
             {"variant_name": "Pack", "variant_value": "Box 20 sachet", "sku_code": "HJCH-LATTE-B20", "price": 101200, "stock": 250, "weight_grams": 500},
         ],
-        "image_url": "https://images.tokopedia.net/img/cache/500-square/VqbcmM/2024/1/4/hojicha-latte-box20.jpg",
+        "image_url": "https://matchamu.com/wp-content/uploads/2023/03/2-Hojicha-Latte-Box-20.png",
         "attributes": {"sachet_count": 20, "caffeine": "Low", "halal": True},
     },
     {
@@ -108,7 +108,7 @@ PRODUCTS = [
         "skus": [
             {"variant_name": "Pack", "variant_value": "Box 3 sachet", "sku_code": "HJCH-LATTE-B3", "price": 15620, "stock": 400, "weight_grams": 100},
         ],
-        "image_url": "https://images.tokopedia.net/img/cache/500-square/VqbcmM/2024/1/4/hojicha-latte-box3.jpg",
+        "image_url": "https://matchamu.com/wp-content/uploads/2023/03/3-Hojicha-Box-Latte-3.png",
         "attributes": {"sachet_count": 3, "halal": True},
     },
     {
@@ -118,7 +118,7 @@ PRODUCTS = [
         "skus": [
             {"variant_name": "Size", "variant_value": "Box", "sku_code": "HJCH-PURE-BOX", "price": 15620, "stock": 200, "weight_grams": 50},
         ],
-        "image_url": "https://images.tokopedia.net/img/cache/500-square/VqbcmM/2024/1/4/hojicha-powder.jpg",
+        "image_url": "https://matchamu.com/wp-content/uploads/2023/03/3-Hojicha-Powder.png",
         "attributes": {"origin": "Japan", "halal": True},
     },
     {
@@ -128,7 +128,7 @@ PRODUCTS = [
         "skus": [
             {"variant_name": "Size", "variant_value": "Jar", "sku_code": "SKRA-LATTE-JAR", "price": 90750, "stock": 150, "weight_grams": 350},
         ],
-        "image_url": "https://images.tokopedia.net/img/cache/500-square/VqbcmM/2024/1/4/sakura-latte-jar.jpg",
+        "image_url": "https://matchamu.com/wp-content/uploads/2023/03/sakura-latte.png",
         "attributes": {"flavor": "Sakura (Cherry Blossom)", "halal": True},
     },
     {
@@ -138,7 +138,7 @@ PRODUCTS = [
         "skus": [
             {"variant_name": "Size", "variant_value": "Jar", "sku_code": "TARO-LATTE-JAR", "price": 68750, "stock": 180, "weight_grams": 350},
         ],
-        "image_url": "https://images.tokopedia.net/img/cache/500-square/VqbcmM/2024/1/4/taro-latte-jar.jpg",
+        "image_url": "https://matchamu.com/wp-content/uploads/2023/03/taro-latte-1.png",
         "attributes": {"flavor": "Taro (Ubi Ungu)", "halal": True},
     },
     {
@@ -148,7 +148,7 @@ PRODUCTS = [
         "skus": [
             {"variant_name": "Pack", "variant_value": "Box 3 sachet", "sku_code": "KNKO-LATTE-B3", "price": 15620, "stock": 300, "weight_grams": 100},
         ],
-        "image_url": "https://images.tokopedia.net/img/cache/500-square/VqbcmM/2024/1/4/kinako-latte-box3.jpg",
+        "image_url": "https://matchamu.com/wp-content/uploads/2023/03/3-Kinako-Latte-Box-3.png",
         "attributes": {"flavor": "Kinako (Roasted Soybean)", "halal": True},
     },
     {
@@ -158,7 +158,7 @@ PRODUCTS = [
         "skus": [
             {"variant_name": "Pack", "variant_value": "Box 3 sachet", "sku_code": "BSME-LATTE-B3", "price": 15620, "stock": 300, "weight_grams": 100},
         ],
-        "image_url": "https://images.tokopedia.net/img/cache/500-square/VqbcmM/2024/1/4/black-sesame-latte-box3.jpg",
+        "image_url": "https://matchamu.com/wp-content/uploads/2023/03/3-Black-Sesame.png",
         "attributes": {"flavor": "Black Sesame (Wijen Hitam)", "halal": True},
     },
     {
@@ -168,7 +168,7 @@ PRODUCTS = [
         "skus": [
             {"variant_name": "Pack", "variant_value": "Box 30 sachet", "sku_code": "ABTK-B30", "price": 58080, "stock": 400, "weight_grams": 720},
         ],
-        "image_url": "https://images.tokopedia.net/img/cache/500-square/VqbcmM/2024/1/4/abang-teh-tarik-box30.jpg",
+        "image_url": "https://matchamu.com/wp-content/uploads/2023/03/Abang-teh-tarik.png",
         "attributes": {"sachet_count": 30, "per_sachet_gram": 24, "halal": True},
     },
     {
@@ -178,7 +178,7 @@ PRODUCTS = [
         "skus": [
             {"variant_name": "Pack", "variant_value": "1 sachet", "sku_code": "ABTK-1", "price": 12705, "stock": 1000, "weight_grams": 30},
         ],
-        "image_url": "https://images.tokopedia.net/img/cache/500-square/VqbcmM/2024/1/4/abang-teh-tarik-single.jpg",
+        "image_url": "https://matchamu.com/wp-content/uploads/2023/03/2-Abang-Teh-Tarik.png",
         "attributes": {"sachet_count": 1, "halal": True},
     },
     {
@@ -188,7 +188,7 @@ PRODUCTS = [
         "skus": [
             {"variant_name": "Variant", "variant_value": "Original", "sku_code": "MKJM-ORI", "price": 9900, "stock": 500, "weight_grams": 30},
         ],
-        "image_url": "https://images.tokopedia.net/img/cache/500-square/VqbcmM/2024/1/4/makjamu-original.jpg",
+        "image_url": "https://matchamu.com/wp-content/uploads/2023/03/2-Makjamu.png",
         "attributes": {"type": "Jamu Modern", "halal": True},
     },
     {
@@ -198,7 +198,7 @@ PRODUCTS = [
         "skus": [
             {"variant_name": "Variant", "variant_value": "Glowing Hero", "sku_code": "MKJM-GLOW", "price": 9900, "stock": 400, "weight_grams": 30},
         ],
-        "image_url": "https://images.tokopedia.net/img/cache/500-square/VqbcmM/2024/1/4/makjamu-glowing.jpg",
+        "image_url": "https://matchamu.com/wp-content/uploads/2023/03/2-Makjamu-Glow.png",
         "attributes": {"type": "Jamu Modern - Beauty", "halal": True},
     },
 ]
