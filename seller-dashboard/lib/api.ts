@@ -252,3 +252,118 @@ export async function updateStore(
   });
   return res.data;
 }
+
+// -- Customers / CRM ---------------------------------------------------
+
+export type CustomerSegment =
+  | "INACTIVE" | "NEW" | "ONE_TIME" | "REPEAT" | "HIGH_LTV" | "AT_RISK" | "CHAMPION";
+
+export interface CustomerSummary {
+  email: string;
+  name: string;
+  phone: string | null;
+  photo_url: string | null;
+  order_count: number;
+  lifetime_value_idr: number;
+  first_order_at: string | null;
+  last_order_at: string | null;
+  days_since_last_order: number | null;
+  beli_aman_pct: number;
+  is_beli_aman_buyer: boolean;
+  segment: CustomerSegment;
+}
+
+export interface CustomerListResponse {
+  data: CustomerSummary[];
+  summary: {
+    total_customers: number;
+    beli_aman_customers: number;
+    direct_customers: number;
+    beli_aman_pct: number;
+    total_lifetime_value_idr: number;
+    average_lifetime_value_idr: number;
+  };
+}
+
+export interface CustomerDetail extends CustomerSummary {
+  orders: {
+    id: string;
+    beckn_order_id: string | null;
+    status: string;
+    total: number;
+    currency: string;
+    created_at: string;
+    bap_id: string | null;
+    escrow_status: EscrowStatus;
+    items: any;
+    shipping_address: any;
+  }[];
+}
+
+export async function fetchCustomers(source?: "beli_aman" | "direct"): Promise<CustomerListResponse> {
+  const storeId = await getStoreId();
+  const q = source ? `&source=${source}` : "";
+  return request<CustomerListResponse>(`/customers?store_id=${storeId}${q}`);
+}
+
+export async function fetchCustomer(email: string): Promise<{ data: CustomerDetail }> {
+  const storeId = await getStoreId();
+  return request<{ data: CustomerDetail }>(`/customers/${encodeURIComponent(email)}?store_id=${storeId}`);
+}
+
+// -- Insights ---------------------------------------------------------
+
+export interface InsightsOverview {
+  window_days: number;
+  metrics: {
+    total_orders: number;
+    total_revenue_idr: number;
+    unique_buyers: number;
+    repeat_buyer_count: number;
+    repeat_buyer_pct: number;
+    average_order_value_idr: number;
+    beli_aman: {
+      orders: number;
+      buyers: number;
+      revenue_idr: number;
+      average_order_value_idr: number;
+      pct_of_orders: number;
+    };
+  };
+}
+
+export interface SegmentBreakdown {
+  segments: { segment: CustomerSegment; buyer_count: number; revenue_idr: number }[];
+  total_buyers: number;
+}
+
+export interface CrossMerchantInsights {
+  available: boolean;
+  reason?: string;
+  current_buyer_count?: number;
+  threshold?: number;
+  buyer_cohort_size?: number;
+  patterns?: { pattern: string; headline: string; detail: string }[];
+  demographic_aggregates?: {
+    geography: { label: string; pct: number }[];
+    device_mix: { label: string; pct: number }[];
+    payment_method_mix: { label: string; pct: number }[];
+  };
+  data_freshness?: string;
+  privacy_note?: string;
+}
+
+export async function fetchInsightsOverview(days = 30): Promise<InsightsOverview> {
+  const storeId = await getStoreId();
+  return request<InsightsOverview>(`/insights/overview?store_id=${storeId}&days=${days}`);
+}
+
+export async function fetchSegments(): Promise<SegmentBreakdown> {
+  const storeId = await getStoreId();
+  return request<SegmentBreakdown>(`/insights/buyer-segments?store_id=${storeId}`);
+}
+
+export async function fetchCrossMerchant(): Promise<CrossMerchantInsights> {
+  const storeId = await getStoreId();
+  return request<CrossMerchantInsights>(`/insights/cross-merchant?store_id=${storeId}`);
+}
