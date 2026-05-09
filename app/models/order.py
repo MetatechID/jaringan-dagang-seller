@@ -94,7 +94,12 @@ class Order(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         String(255), nullable=True, index=True
     )
     escrow_status: Mapped[EscrowStatus] = mapped_column(
-        SAEnum(EscrowStatus, name="escrow_status", create_constraint=True),
+        SAEnum(
+            EscrowStatus,
+            name="escrow_status",
+            create_constraint=True,
+            values_callable=lambda x: [e.value for e in x],
+        ),
         nullable=False,
         default=EscrowStatus.NONE,
     )
