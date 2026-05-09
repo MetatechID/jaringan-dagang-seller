@@ -45,14 +45,89 @@ def _segment_for(total_orders: int, total_spent: int, days_since_last: int | Non
     return "REPEAT"
 
 
+_DEMO_CUSTOMER_NAMES = [
+    ("Sari Kusuma", "sari.kusuma@example.com", True),
+    ("Budi Santoso", "budi.santoso@example.com", True),
+    ("Maya Anggraini", "maya.a@example.com", True),
+    ("Rio Pratama", "rio.pratama@example.com", False),
+    ("Nadia Putri", "nadia.putri@example.com", True),
+    ("Arif Wijaya", "arif.w@example.com", True),
+    ("Lina Hartono", "lina.hartono@example.com", False),
+    ("Dimas Saputra", "dimas.s@example.com", True),
+    ("Citra Lestari", "citra.l@example.com", True),
+    ("Eko Nugroho", "eko.nugroho@example.com", False),
+    ("Putri Maharani", "putri.m@example.com", True),
+    ("Andi Setiawan", "andi.s@example.com", True),
+    ("Dewi Sulistio", "dewi.s@example.com", True),
+    ("Rizky Pratama", "rizky.p@example.com", False),
+    ("Karina Dewi", "karina.d@example.com", True),
+    ("Agus Wibowo", "agus.w@example.com", True),
+    ("Sinta Maharani", "sinta.m@example.com", False),
+    ("Fajar Hidayat", "fajar.h@example.com", True),
+    ("Nia Ramadhani", "nia.r@example.com", True),
+    ("Hendra Kurniawan", "hendra.k@example.com", True),
+    ("Tika Pertiwi", "tika.p@example.com", False),
+    ("Wahyu Santoso", "wahyu.s@example.com", True),
+    ("Ratna Sari", "ratna.s@example.com", True),
+    ("Bagas Pratama", "bagas.p@example.com", True),
+]
+
+
+def _build_demo_customers() -> list[dict[str, Any]]:
+    """Build a credible CRM cohort for the prospect demo."""
+    import random
+    random.seed(42)
+    now = datetime.now(timezone.utc)
+    out = []
+    seg_plan = (
+        ["CHAMPION"] * 4 + ["HIGH_LTV"] * 5 + ["REPEAT"] * 8 + ["NEW"] * 4 +
+        ["ONE_TIME"] * 2 + ["AT_RISK"] * 1
+    )
+    for i, (name, email, is_ba) in enumerate(_DEMO_CUSTOMER_NAMES[:len(seg_plan)]):
+        seg = seg_plan[i]
+        if seg == "CHAMPION":
+            order_count = random.randint(8, 14); ltv = random.randint(2_400_000, 4_800_000); days_since = random.randint(2, 18)
+        elif seg == "HIGH_LTV":
+            order_count = random.randint(5, 8); ltv = random.randint(1_200_000, 2_300_000); days_since = random.randint(20, 55)
+        elif seg == "REPEAT":
+            order_count = random.randint(2, 4); ltv = random.randint(500_000, 1_100_000); days_since = random.randint(5, 45)
+        elif seg == "NEW":
+            order_count = 1; ltv = random.randint(180_000, 480_000); days_since = random.randint(0, 25)
+        elif seg == "ONE_TIME":
+            order_count = 1; ltv = random.randint(120_000, 350_000); days_since = random.randint(40, 120)
+        else:  # AT_RISK
+            order_count = random.randint(2, 5); ltv = random.randint(600_000, 1_400_000); days_since = random.randint(95, 180)
+        last = now - timedelta(days=days_since)
+        first = last - timedelta(days=random.randint(30, 240))
+        out.append({
+            "email": email,
+            "name": name,
+            "phone": None,
+            "photo_url": None,
+            "order_count": order_count,
+            "lifetime_value_idr": ltv,
+            "first_order_at": first.isoformat(),
+            "last_order_at": last.isoformat(),
+            "days_since_last_order": days_since,
+            "beli_aman_pct": 100.0 if is_ba else 0.0,
+            "is_beli_aman_buyer": is_ba,
+            "segment": seg,
+            "_demo": True,
+        })
+    return out
+
+
 @router.get("")
 async def list_customers(
     store_id: uuid.UUID = Query(default=DEMO_STORE_ID),
     source: str | None = Query(default=None, description="filter: 'beli_aman' | 'direct' | None"),
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
-    """List unique customers with rolled-up metrics."""
-    # Group orders by buyer_email
+    """List unique customers with rolled-up metrics.
+
+    Real customers (rolled up from this store's orders) are merged with mock
+    demo customers so the CRM tells a credible story for prospect demos.
+    """
     stmt = (
         select(
             Order.buyer_email,
@@ -73,7 +148,7 @@ async def list_customers(
     rows = result.all()
 
     now = datetime.now(timezone.utc)
-    customers = []
+    real_customers = []
     for r in rows:
         ltv = float(r.lifetime_value or 0)
         ba_pct = (r.beli_aman_count / r.order_count * 100) if r.order_count else 0
@@ -83,12 +158,7 @@ async def list_customers(
             last = r.last_order_at if r.last_order_at.tzinfo else r.last_order_at.replace(tzinfo=timezone.utc)
             days_since_last = (now - last).days
 
-        if source == "beli_aman" and not is_ba_buyer:
-            continue
-        if source == "direct" and is_ba_buyer:
-            continue
-
-        customers.append({
+        real_customers.append({
             "email": r.buyer_email,
             "name": r.buyer_name or "Unknown",
             "phone": r.buyer_phone,
@@ -101,9 +171,18 @@ async def list_customers(
             "beli_aman_pct": round(ba_pct, 1),
             "is_beli_aman_buyer": is_ba_buyer,
             "segment": _segment_for(int(r.order_count), int(ltv), days_since_last),
+            "_demo": False,
         })
 
-    # Top-line metrics
+    # Real customers first, then mock demo cohort to fill out the CRM
+    customers = real_customers + _build_demo_customers()
+
+    # Apply source filter (after merging so totals reflect what's shown)
+    if source == "beli_aman":
+        customers = [c for c in customers if c["is_beli_aman_buyer"]]
+    elif source == "direct":
+        customers = [c for c in customers if not c["is_beli_aman_buyer"]]
+
     total_customers = len(customers)
     ba_customers = sum(1 for c in customers if c["is_beli_aman_buyer"])
     total_ltv = sum(c["lifetime_value_idr"] for c in customers)
@@ -117,7 +196,9 @@ async def list_customers(
             "beli_aman_pct": round(ba_customers / total_customers * 100, 1) if total_customers else 0,
             "total_lifetime_value_idr": total_ltv,
             "average_lifetime_value_idr": int(total_ltv / total_customers) if total_customers else 0,
+            "real_customer_count": len(real_customers),
         },
+        "demo_mode": True,
     }
 
 

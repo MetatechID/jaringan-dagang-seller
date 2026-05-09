@@ -15,7 +15,7 @@ from contextlib import asynccontextmanager
 from typing import Any
 
 import httpx
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
@@ -89,13 +89,16 @@ async def lifespan(app: FastAPI):
     """Startup: DB init + registry registration.  Shutdown: dispose engine."""
     logger.info("Starting %s v%s", settings.APP_NAME, settings.APP_VERSION)
 
-    # Optionally create tables (use Alembic in production)
-    try:
-        from app.models import Base
-        async with engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
-    except Exception:
-        logger.warning("Could not connect to database (skipping table creation)", exc_info=True)
+    # Schema is owned by Alembic. Local dev can run `alembic upgrade head` or
+    # set CREATE_TABLES_ON_STARTUP=1 to recreate; serverless cold starts must
+    # not pay for a metadata round-trip on every container boot.
+    if os.getenv("CREATE_TABLES_ON_STARTUP") == "1":
+        try:
+            from app.models import Base
+            async with engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
+        except Exception:
+            logger.warning("Could not connect to database (skipping table creation)", exc_info=True)
 
     await _register_with_registry()
 
@@ -126,6 +129,31 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# Browser cache for read-only seller dashboard endpoints. Per-seller data, so
+# `private`. SWR lets the page paint instantly while a background fetch refreshes.
+_CACHEABLE_PREFIXES = (
+    "/api/orders",
+    "/api/customers",
+    "/api/insights",
+    "/api/products",
+    "/api/store",
+    "/api/stores",
+)
+
+
+@app.middleware("http")
+async def _cache_control(request: Request, call_next):
+    response = await call_next(request)
+    if request.method == "GET" and any(
+        request.url.path.startswith(p) for p in _CACHEABLE_PREFIXES
+    ):
+        response.headers.setdefault(
+            "Cache-Control",
+            "private, max-age=15, stale-while-revalidate=120",
+        )
+    return response
 
 
 # ------------------------------------------------------------------
