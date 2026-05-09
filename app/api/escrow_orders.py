@@ -77,6 +77,16 @@ async def create_escrow_order(
     body: EscrowOrderIn, db: AsyncSession = Depends(get_db)
 ) -> dict[str, Any]:
     """Materialize a Beli Aman order in the seller dashboard."""
+    try:
+        return await _create_escrow_order_impl(body, db)
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.exception("escrow_orders POST failed")
+        raise HTTPException(500, f"escrow_orders error: {type(e).__name__}: {e}")
+
+
+async def _create_escrow_order_impl(body: EscrowOrderIn, db: AsyncSession) -> dict[str, Any]:
     # Idempotency: skip if we've already seen this beckn_order_id.
     from sqlalchemy import select
 
