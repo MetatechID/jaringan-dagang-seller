@@ -4,6 +4,7 @@ import enum
 import uuid
 from decimal import Decimal
 
+from sqlalchemy import BigInteger
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy import ForeignKey, Numeric, String, Text
 from sqlalchemy.dialects.postgresql import JSONB, UUID
@@ -18,6 +19,20 @@ class OrderStatus(str, enum.Enum):
     IN_PROGRESS = "in_progress"
     COMPLETED = "completed"
     CANCELLED = "cancelled"
+
+
+class EscrowStatus(str, enum.Enum):
+    """Beli Aman escrow status as observed by the seller (read-only).
+
+    The seller is *informed* of escrow state but cannot mutate it — only the
+    Beli Aman BAP releases / refunds. NONE means the order didn't come via
+    Beli Aman (e.g. direct Beckn from another BAP).
+    """
+
+    NONE = "none"
+    HELD = "held"
+    RELEASED = "released"
+    REFUNDED = "refunded"
 
 
 # Valid order state transitions
@@ -69,6 +84,25 @@ class Order(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     )
     fulfillment_id: Mapped[str | None] = mapped_column(
         String(255), nullable=True
+    )
+
+    # --- Beli Aman fields (added 2026-05-09) ---
+    # bap_id is the subscriber_id of the BAP that originated this order.
+    # When equal to "bap.beli-aman.local" the dashboard renders the "via Beli Aman"
+    # badge + escrow panel.
+    bap_id: Mapped[str | None] = mapped_column(
+        String(255), nullable=True, index=True
+    )
+    escrow_status: Mapped[EscrowStatus] = mapped_column(
+        SAEnum(EscrowStatus, name="escrow_status", create_constraint=True),
+        nullable=False,
+        default=EscrowStatus.NONE,
+    )
+    escrow_amount_idr: Mapped[int | None] = mapped_column(
+        BigInteger, nullable=True
+    )
+    buyer_photo_url: Mapped[str | None] = mapped_column(
+        Text, nullable=True
     )
 
     # Relationships

@@ -2,7 +2,13 @@
 
 import { useEffect, useState, useMemo } from "react";
 import Link from "next/link";
-import { fetchOrders, type Order, type OrderStatus } from "@/lib/api";
+import {
+  fetchOrders,
+  isBeliAman,
+  type Order,
+  type OrderStatus,
+  type EscrowStatus,
+} from "@/lib/api";
 import { formatIDR, formatDate } from "@/lib/format";
 import StatusBadge from "@/components/StatusBadge";
 import LoadingSpinner from "@/components/LoadingSpinner";
@@ -157,10 +163,16 @@ export default function OrdersPage() {
                     Customer
                   </th>
                   <th className="px-5 py-3 text-left font-medium text-gray-500">
+                    Source
+                  </th>
+                  <th className="px-5 py-3 text-left font-medium text-gray-500">
                     Total
                   </th>
                   <th className="px-5 py-3 text-left font-medium text-gray-500">
                     Status
+                  </th>
+                  <th className="px-5 py-3 text-left font-medium text-gray-500">
+                    Escrow
                   </th>
                   <th className="px-5 py-3 text-left font-medium text-gray-500">
                     Date
@@ -196,11 +208,17 @@ export default function OrdersPage() {
                         )}
                       </div>
                     </td>
+                    <td className="px-5 py-3.5">
+                      <SourcePill order={order} />
+                    </td>
                     <td className="px-5 py-3.5 font-semibold text-gray-900">
                       {formatIDR(order.total)}
                     </td>
                     <td className="px-5 py-3.5">
                       <StatusBadge status={order.status} />
+                    </td>
+                    <td className="px-5 py-3.5">
+                      <EscrowPill status={order.escrow_status} />
                     </td>
                     <td className="px-5 py-3.5 text-gray-500">
                       {formatDate(order.created_at)}
@@ -213,5 +231,39 @@ export default function OrdersPage() {
         </div>
       )}
     </div>
+  );
+}
+
+function SourcePill({ order }: { order: Order }) {
+  if (isBeliAman(order)) {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-xs font-medium text-emerald-700 border border-emerald-100">
+        🛡️ via Beli Aman
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center rounded-full bg-gray-50 px-2.5 py-0.5 text-xs font-medium text-gray-600 border border-gray-100">
+      Direct
+    </span>
+  );
+}
+
+function EscrowPill({ status }: { status: EscrowStatus | undefined }) {
+  if (!status || status === "none") {
+    return <span className="text-xs text-gray-400">—</span>;
+  }
+  const map: Record<Exclude<EscrowStatus, "none">, { bg: string; fg: string; border: string; label: string }> = {
+    held: { bg: "bg-amber-50", fg: "text-amber-700", border: "border-amber-100", label: "HELD" },
+    released: { bg: "bg-emerald-50", fg: "text-emerald-700", border: "border-emerald-100", label: "RELEASED" },
+    refunded: { bg: "bg-red-50", fg: "text-red-700", border: "border-red-100", label: "REFUNDED" },
+  };
+  const c = map[status];
+  return (
+    <span
+      className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-semibold ${c.bg} ${c.fg} border ${c.border}`}
+    >
+      {c.label}
+    </span>
   );
 }

@@ -83,12 +83,19 @@ def _serialize(order) -> dict[str, Any]:
         "buyer_name": order.buyer_name,
         "buyer_phone": order.buyer_phone,
         "buyer_email": order.buyer_email,
+        "buyer_photo_url": getattr(order, "buyer_photo_url", None),
         "billing_address": order.billing_address,
         "shipping_address": order.shipping_address,
         "status": order.status.value if order.status else None,
         "total": float(order.total) if order.total else 0,
         "currency": order.currency,
         "items": order.items,
+        # Beli Aman fields (added 2026-05-09)
+        "bap_id": getattr(order, "bap_id", None),
+        "escrow_status": (
+            order.escrow_status.value if getattr(order, "escrow_status", None) else "none"
+        ),
+        "escrow_amount_idr": getattr(order, "escrow_amount_idr", None),
         "created_at": order.created_at.isoformat() if order.created_at else None,
         "updated_at": order.updated_at.isoformat() if order.updated_at else None,
     }

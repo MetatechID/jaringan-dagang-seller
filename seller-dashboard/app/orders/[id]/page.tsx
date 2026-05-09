@@ -5,7 +5,9 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import {
   fetchOrder,
+  isBeliAman,
   updateOrderStatus,
+  type EscrowStatus,
   type Order,
   type OrderStatus,
 } from "@/lib/api";
@@ -155,6 +157,9 @@ export default function OrderDetailPage() {
           </div>
         </div>
       </div>
+
+      {/* Beli Aman Escrow panel — only when this order came via the Beli Aman BAP */}
+      {isBeliAman(order) ? <BeliAmanEscrowPanel order={order} /> : null}
 
       {/* Status timeline */}
       {!isCancelled && (
@@ -427,5 +432,139 @@ export default function OrderDetailPage() {
         )}
       </div>
     </div>
+  );
+}
+
+/* -------------------------------------------------------------------------
+ * Beli Aman Escrow panel — read-only on the seller side. Only the BAP can
+ * mutate escrow state, so the "Release escrow" button is intentionally
+ * disabled with a tooltip explaining why.
+ * ------------------------------------------------------------------------- */
+
+function BeliAmanEscrowPanel({ order }: { order: Order }) {
+  const status = order.escrow_status;
+  const amount = order.escrow_amount_idr ?? Math.round(order.total);
+
+  const statusConf: Record<
+    EscrowStatus,
+    { bg: string; text: string; label: string; ring: string }
+  > = {
+    none: { bg: "bg-gray-100", text: "text-gray-700", ring: "ring-gray-200", label: "—" },
+    held: { bg: "bg-amber-100", text: "text-amber-800", ring: "ring-amber-200", label: "HELD" },
+    released: { bg: "bg-emerald-100", text: "text-emerald-800", ring: "ring-emerald-200", label: "RELEASED" },
+    refunded: { bg: "bg-red-100", text: "text-red-800", ring: "ring-red-200", label: "REFUNDED" },
+  };
+  const c = statusConf[status] || statusConf.none;
+
+  return (
+    <div className="card p-6 border-2 border-emerald-100 bg-gradient-to-br from-emerald-50/40 to-white">
+      <div className="flex items-start justify-between gap-4 mb-4">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-full bg-emerald-100 grid place-items-center text-xl">🛡️</div>
+          <div>
+            <h3 className="text-sm font-bold text-emerald-800">Beli Aman Escrow</h3>
+            <p className="text-xs text-gray-500">via {order.bap_id}</p>
+          </div>
+        </div>
+        <span
+          className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold ${c.bg} ${c.text} ring-1 ${c.ring}`}
+        >
+          {c.label}
+        </span>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+        <div>
+          <div className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">Amount held</div>
+          <div className="text-lg font-bold text-gray-900 mt-0.5">{formatIDR(amount)}</div>
+        </div>
+        <div className="md:col-span-2">
+          <div className="text-[10px] uppercase tracking-wider text-gray-500 font-semibold">Buyer (verified)</div>
+          <div className="flex items-center gap-2 mt-1">
+            {order.buyer_photo_url ? (
+              <img src={order.buyer_photo_url} alt="" className="w-7 h-7 rounded-full" />
+            ) : (
+              <div className="w-7 h-7 rounded-full bg-gray-200" />
+            )}
+            <div>
+              <div className="text-sm font-semibold text-gray-900">{order.buyer_name || "Unknown"}</div>
+              <div className="text-xs text-gray-500">{order.buyer_email}</div>
+            </div>
+            <span
+              className="ml-2 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-semibold border border-emerald-100"
+              title="Identity verified via Google"
+            >
+              ✓ Google
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Lifecycle timeline */}
+      <ol className="space-y-2 text-sm">
+        <TimelineItem done label="Buyer paid via Beli Aman" />
+        <TimelineItem done={status !== "none"} label="Order received by seller" />
+        <TimelineItem
+          done={status === "released" || ["in_progress", "completed"].includes(order.status)}
+          label={
+            order.status === "completed"
+              ? "Delivered & released"
+              : order.status === "in_progress"
+                ? "Shipping in progress"
+                : "Awaiting shipment"
+          }
+        />
+        <TimelineItem
+          done={status === "released"}
+          label={
+            status === "released"
+              ? "Funds released to seller"
+              : "Auto-release scheduled · D+3 after delivery"
+          }
+        />
+      </ol>
+
+      <div className="mt-4 pt-4 border-t border-emerald-100">
+        <div className="flex items-center justify-between gap-4">
+          <p className="text-xs text-gray-500 max-w-md">
+            Funds release automatically D+3 after delivery, or earlier when buyer confirms receipt. Only Beli Aman can release escrow — sellers are <strong>informed</strong>, not in control.
+          </p>
+          <button
+            type="button"
+            disabled
+            title="Read-only: only Beli Aman BAP can release escrow"
+            className="px-3 py-1.5 rounded-md bg-gray-100 text-gray-400 text-xs font-semibold cursor-not-allowed"
+          >
+            Release escrow
+          </button>
+        </div>
+      </div>
+
+      <details className="mt-3 text-xs text-gray-600">
+        <summary className="cursor-pointer text-emerald-700 hover:text-emerald-800">
+          What is Beli Aman?
+        </summary>
+        <p className="mt-2 leading-relaxed">
+          Beli Aman is the buyer-protection layer on Jaringan Dagang. It holds buyer payment in
+          escrow until goods are received, gives sellers verified Google-identified buyer data, and
+          surfaces orders here in your dashboard with a {`"via Beli Aman"`} badge.
+        </p>
+      </details>
+    </div>
+  );
+}
+
+function TimelineItem({ done, label }: { done: boolean; label: string }) {
+  return (
+    <li className="flex items-center gap-2.5">
+      <span
+        className={`w-5 h-5 rounded-full grid place-items-center text-xs font-bold ${
+          done ? "bg-emerald-500 text-white" : "bg-gray-200 text-gray-400"
+        }`}
+      >
+        {done ? "✓" : ""}
+      </span>
+      <span className={done ? "text-gray-900" : "text-gray-400"}>{label}</span>
+    </li>
   );
 }

@@ -158,6 +158,14 @@ export interface OrderFulfillment {
   shipping_cost: number | null;
 }
 
+export type EscrowStatus = "none" | "held" | "released" | "refunded";
+
+export const BELI_AMAN_BAP_ID = "bap.beli-aman.local";
+
+export function isBeliAman(o: Pick<Order, "bap_id">): boolean {
+  return o.bap_id === BELI_AMAN_BAP_ID;
+}
+
 export interface Order {
   id: string;
   store_id: string;
@@ -165,14 +173,19 @@ export interface Order {
   buyer_name: string | null;
   buyer_phone: string | null;
   buyer_email: string | null;
+  buyer_photo_url: string | null;
   billing_address: Record<string, unknown> | null;
   shipping_address: Record<string, unknown> | null;
   status: OrderStatus;
   total: number;
   currency: string;
-  items: Record<string, unknown>[] | null;
+  items: Record<string, unknown>[] | Record<string, unknown> | null;
   payment?: OrderPayment;
   fulfillment?: OrderFulfillment;
+  // Beli Aman fields (added 2026-05-09)
+  bap_id: string | null;
+  escrow_status: EscrowStatus;
+  escrow_amount_idr: number | null;
   created_at: string | null;
   updated_at: string | null;
 }

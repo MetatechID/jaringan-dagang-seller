@@ -137,6 +137,7 @@ from app.api.products import router as products_router  # noqa: E402
 from app.api.orders import router as orders_router  # noqa: E402
 from app.api.store import router as store_router  # noqa: E402
 from app.api.store import stores_router  # noqa: E402
+from app.api.escrow_orders import router as escrow_orders_router  # noqa: E402
 
 # Beckn protocol endpoints under /beckn/ (e.g. POST /beckn/search, POST /beckn/confirm)
 app.include_router(beckn_router, prefix="/beckn")
@@ -146,6 +147,9 @@ app.include_router(products_router, prefix="/api")
 app.include_router(orders_router, prefix="/api")
 app.include_router(store_router, prefix="/api")
 app.include_router(stores_router, prefix="/api")
+
+# Beli Aman bridge: BAP POSTs escrow orders to /api/internal/escrow-orders
+app.include_router(escrow_orders_router, prefix="/api")
 
 
 @app.get("/health")

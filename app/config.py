@@ -31,12 +31,19 @@ class Settings(BaseSettings):
         "http://localhost:3000",
         "http://localhost:3001",
         "http://localhost:3002",
+        "http://localhost:3003",
         "http://127.0.0.1:3000",
         "http://127.0.0.1:3002",
         "https://jaringan-dagang-seller.metatech.id",
         "https://jaringan-dagang-buyer.metatech.id",
         "https://jaringan-dagang.metatech.id",
+        "https://beli-aman.metatech.id",
     ]
+
+    # --- Beli Aman bridge ---
+    # Shared secret with the Beli Aman BAP. The BAP POSTs new escrow orders to
+    # /api/internal/escrow-orders with this token in X-Internal-Token. NEVER commit.
+    BELI_AMAN_INTERNAL_TOKEN: str = "dev-seller-bridge-token"
 
     # --- Beckn Network ---
     REGISTRY_URL: Optional[str] = "http://localhost:3030"
