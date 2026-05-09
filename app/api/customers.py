@@ -225,6 +225,36 @@ async def get_customer(
     )
     agg = (await db.execute(agg_stmt)).one()
     if not agg[0]:
+        # Try to find them in the demo cohort
+        for c in _build_demo_customers():
+            if c["email"] == email:
+                # Build a few synthetic orders for the demo customer
+                import random
+                random.seed(hash(email) % 9999)
+                demo_orders = []
+                for i in range(c["order_count"]):
+                    last_dt = datetime.fromisoformat(c["last_order_at"].replace("Z", "+00:00"))
+                    days_back = i * random.randint(20, 50)
+                    o_dt = last_dt - timedelta(days=days_back)
+                    o_total = c["lifetime_value_idr"] // c["order_count"]
+                    demo_orders.append({
+                        "id": f"demo-{i}-{abs(hash(email)) % 99999:05d}",
+                        "beckn_order_id": None,
+                        "status": "completed" if i > 0 else "in_progress",
+                        "total": o_total,
+                        "currency": "IDR",
+                        "created_at": o_dt.isoformat(),
+                        "bap_id": "bap.beli-aman.local" if c["is_beli_aman_buyer"] else None,
+                        "escrow_status": "released" if c["is_beli_aman_buyer"] else "none",
+                        "items": {"lines": [{"sku": "DEMO-SKU", "name": "Sample item", "qty": 1, "unit_price_idr": o_total, "image": None}]},
+                        "shipping_address": {"line1": "Demo address", "kota": "Jakarta", "provinsi": "DKI Jakarta"},
+                    })
+                return {
+                    "data": {
+                        **c,
+                        "orders": demo_orders,
+                    }
+                }
         raise HTTPException(404, f"No customer with email {email}")
 
     order_count, total_spent, first_at, last_at, name, phone, photo, ba_count = agg
