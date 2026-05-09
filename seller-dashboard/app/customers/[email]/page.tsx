@@ -191,7 +191,7 @@ export default function CustomerDetailPage() {
               <h4 className="font-bold text-emerald-800">This buyer came via Beli Aman</h4>
               <p className="text-sm text-gray-700 mt-1">
                 Their identity is Google-verified. Email is authentic. You own this customer
-                relationship — Beli Aman doesn't get between you. On marketplaces this same buyer
+                relationship — Beli Aman doesn&apos;t get between you. On marketplaces this same buyer
                 would be anonymous.
               </p>
               <p className="text-xs text-gray-500 mt-2">

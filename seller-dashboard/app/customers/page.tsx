@@ -117,7 +117,7 @@ export default function CustomersPage() {
       {/* Table */}
       {filtered.length === 0 ? (
         <div className="card p-12 text-center text-sm text-gray-500">
-          No customers match your filter yet. Once buyers place orders, they'll show up here.
+          No customers match your filter yet. Once buyers place orders, they&apos;ll show up here.
         </div>
       ) : (
         <div className="card overflow-hidden">
