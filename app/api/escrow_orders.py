@@ -19,6 +19,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database import get_db
 from app.models.order import EscrowStatus, Order, OrderStatus
+from app.models.store import Store
 
 logger = logging.getLogger(__name__)
 
@@ -93,6 +94,20 @@ async def create_escrow_order(
         await db.commit()
         return {"id": str(existing.id), "status": "updated"}
 
+    # Resolve target store by bpp_id (BAP knows which BPP it called).
+    # Fall back to DEMO_STORE_ID for dev / backwards compat.
+    store_id = DEMO_STORE_ID
+    if body.bpp_id:
+        store_q = await db.execute(select(Store).where(Store.subscriber_id == body.bpp_id))
+        store_row = store_q.scalar_one_or_none()
+        if store_row:
+            store_id = store_row.id
+        else:
+            logger.warning(
+                "Beli Aman order for unknown bpp_id=%s; falling back to demo store",
+                body.bpp_id,
+            )
+
     # New order
     try:
         escrow_status = EscrowStatus(body.escrow_status)
@@ -100,7 +115,7 @@ async def create_escrow_order(
         escrow_status = EscrowStatus.HELD
 
     order = Order(
-        store_id=DEMO_STORE_ID,
+        store_id=store_id,
         beckn_order_id=body.order_id,
         buyer_name=body.buyer.display_name or body.buyer.email,
         buyer_email=body.buyer.email,
