@@ -56,8 +56,14 @@ def load_bpp_signing_key_b64() -> str | None:
 
 def _get_signer(
     signing_private_key_b64: str | None,
+    subscriber_id: str | None = None,
+    unique_key_id: str | None = None,
 ) -> BecknSigner | None:
-    """Build a BecknSigner from a base64-encoded private key, or None."""
+    """Build a BecknSigner from a base64-encoded private key, or None.
+
+    `subscriber_id` defaults to the process-wide BPP id (settings); pass the
+    per-toko subscriber id when signing on behalf of a specific store.
+    """
     if not signing_private_key_b64:
         return None
     try:
@@ -65,8 +71,8 @@ def _get_signer(
         signing_key = SigningKey(key_bytes)
         return BecknSigner(
             signing_key=signing_key,
-            subscriber_id=settings.BPP_SUBSCRIBER_ID,
-            unique_key_id=settings.BPP_UNIQUE_KEY_ID,
+            subscriber_id=subscriber_id or settings.BPP_SUBSCRIBER_ID,
+            unique_key_id=unique_key_id or settings.BPP_UNIQUE_KEY_ID,
         )
     except Exception:
         logger.exception("Failed to initialise BecknSigner")
@@ -78,6 +84,8 @@ async def send_callback(
     action: str,
     response_body: dict[str, Any],
     signing_private_key_b64: str | None = None,
+    signer_subscriber_id: str | None = None,
+    signer_key_id: str | None = None,
 ) -> bool:
     """POST an on_* callback to the BAP.
 
@@ -97,7 +105,12 @@ async def send_callback(
 
     headers: dict[str, str] = {"Content-Type": "application/json"}
 
-    signer = _get_signer(signing_private_key_b64)
+    # If a per-toko subscriber id wasn't explicitly given, try to derive it
+    # from the response body's context.bpp_id so callbacks signed for a
+    # specific store carry the right keyId.
+    if not signer_subscriber_id:
+        signer_subscriber_id = (response_body.get("context") or {}).get("bpp_id")
+    signer = _get_signer(signing_private_key_b64, signer_subscriber_id, signer_key_id)
     if signer:
         auth_header = signer.sign(body_bytes)
         headers["Authorization"] = auth_header

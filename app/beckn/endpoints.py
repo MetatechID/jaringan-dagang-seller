@@ -70,17 +70,54 @@ async def _process_and_callback(
             db.add(log_entry)
             await db.commit()
 
-            # Send callback to BAP — signed with the BPP signing key
+            # Send callback to BAP. Two paths:
+            # 1. /search fan-out: if the catalog has multiple providers, emit
+            #    one /on_search per provider, each signed with that toko's key.
+            #    Buyer's handler is idempotent + per-provider so this is safe.
+            # 2. Everything else: single send, signed with per-store key if the
+            #    response's context.bpp_id maps to a known store, otherwise the
+            #    process-wide BPP key.
             bap_uri = context_dict.get("bap_uri", "")
             callback_action = f"on_{action}"
             if bap_uri:
+                import base64 as _b64
                 from app.beckn.callback_sender import load_bpp_signing_key_b64
-                await send_callback(
-                    bap_uri=bap_uri,
-                    action=callback_action,
-                    response_body=response_body,
-                    signing_private_key_b64=load_bpp_signing_key_b64(),
-                )
+                from app.beckn.signing_keys import signer_for_subscriber_id
+
+                async def _sign_and_send(body: dict):
+                    resp_bpp_id = (body.get("context") or {}).get("bpp_id")
+                    per_store_priv_b64 = None
+                    if resp_bpp_id and resp_bpp_id != settings.BPP_SUBSCRIBER_ID:
+                        s = await signer_for_subscriber_id(db, resp_bpp_id)
+                        if s is not None:
+                            per_store_priv_b64 = _b64.b64encode(bytes(s.signing_key)).decode()
+                    await send_callback(
+                        bap_uri=bap_uri,
+                        action=callback_action,
+                        response_body=body,
+                        signing_private_key_b64=per_store_priv_b64 or load_bpp_signing_key_b64(),
+                        signer_subscriber_id=resp_bpp_id,
+                    )
+
+                catalog = (response_body.get("message") or {}).get("catalog") or {}
+                providers = catalog.get("providers") or catalog.get("bpp/providers") or []
+                if action == "search" and len(providers) > 1:
+                    base_ctx = response_body.get("context") or {}
+                    for prov in providers:
+                        provider_sub_id = prov.get("id")
+                        if not provider_sub_id:
+                            continue
+                        per_prov_body = {
+                            "context": {**base_ctx, "bpp_id": provider_sub_id},
+                            "message": {"catalog": {
+                                **{k: v for k, v in catalog.items() if k not in ("providers", "bpp/providers")},
+                                "providers": [prov],
+                                "bpp/providers": [prov],
+                            }},
+                        }
+                        await _sign_and_send(per_prov_body)
+                else:
+                    await _sign_and_send(response_body)
 
         except Exception:
             logger.exception("Error processing Beckn %s action", action)

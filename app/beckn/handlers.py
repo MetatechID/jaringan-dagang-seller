@@ -413,6 +413,15 @@ async def handle_confirm(
     _total = order.total
     _buyer_email = order.buyer_email
     _order_id = order.id
+    _store_id = order.store_id
+
+    # Resolve the store's subscriber_id so the outbound /on_confirm gets
+    # signed with that toko's key (per-toko trust).
+    from app.models.store import Store as _Store
+    _store_row = (await db.execute(
+        select(_Store).where(_Store.id == _store_id)
+    )).scalar_one_or_none()
+    _store_subscriber_id = (_store_row.subscriber_id if _store_row else None) or settings.BPP_SUBSCRIBER_ID
 
     # Create Xendit invoice
     payment_record = await payment_service.create_invoice(
@@ -423,8 +432,10 @@ async def handle_confirm(
         description=f"Order {_beckn_id}",
     )
 
+    _ctx = _callback_context(context, "on_confirm")
+    _ctx["bpp_id"] = _store_subscriber_id   # per-toko identity
     return {
-        "context": _callback_context(context, "on_confirm"),
+        "context": _ctx,
         "message": {
             "order": {
                 "id": _beckn_id,

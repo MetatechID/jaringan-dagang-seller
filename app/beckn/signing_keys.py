@@ -127,3 +127,25 @@ async def signer_for_store_id(db: AsyncSession, store_id) -> BecknSigner | None:
     if store is None:
         return None
     return await signer_for_store(store)
+
+
+async def signer_for_subscriber_id(db: AsyncSession, subscriber_id: str) -> BecknSigner | None:
+    """Resolve a Beckn subscriber_id (e.g. 'safiyafood.jaringan-dagang.id') to a
+    signer by looking up the matching Store row. Returns None if no store has
+    that subscriber_id or no key is configured."""
+    if not subscriber_id:
+        return None
+    store = (await db.execute(
+        select(Store).where(Store.subscriber_id == subscriber_id)
+    )).scalar_one_or_none()
+    if store is None:
+        return None
+    return await signer_for_store(store)
+
+
+def invalidate_signer_cache(store_id=None) -> None:
+    """Drop cached signer(s). Call after rotate_store_key."""
+    if store_id is None:
+        _signer_cache.clear()
+    else:
+        _signer_cache.pop(store_id, None)

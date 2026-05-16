@@ -60,3 +60,55 @@ async def list_tables(x_admin_token: str = Header(default="")):
             return insp.get_table_names()
         names = await conn.run_sync(_inspect)
     return {"tables": names}
+
+
+@router.post("/rotate-store-key")
+async def rotate_store_key(
+    store_id: str,
+    x_admin_token: str = Header(default=""),
+):
+    """Generate a fresh ed25519 keypair for a store and store the private key
+    in Store.signing_private_key (base64). Returns the public key so the caller
+    can register it on the network registry.
+
+    Use when:
+      - A store is onboarded for the first time on production
+      - A store's key needs rotation (compromise, schedule)
+    """
+    _check(x_admin_token)
+    import base64
+    import os
+    import sys
+    import uuid
+    from sqlalchemy import select
+    from sqlalchemy.ext.asyncio import AsyncSession
+    from app.database import async_session_factory
+    from app.models.store import Store
+
+    # Lazy-import nacl to keep the admin module light
+    from nacl.signing import SigningKey
+
+    try:
+        sid = uuid.UUID(store_id)
+    except ValueError:
+        raise HTTPException(400, "store_id must be a UUID")
+
+    sk = SigningKey.generate()
+    priv_b64 = base64.b64encode(bytes(sk)).decode()
+    pub_b64 = base64.b64encode(bytes(sk.verify_key)).decode()
+
+    async with async_session_factory() as db:
+        store = (await db.execute(select(Store).where(Store.id == sid))).scalar_one_or_none()
+        if store is None:
+            raise HTTPException(404, f"Store {store_id} not found")
+        store.signing_private_key = priv_b64
+        store.signing_public_key = pub_b64
+        await db.commit()
+        await db.refresh(store)
+        return {
+            "store_id": str(store.id),
+            "subscriber_id": store.subscriber_id,
+            "subscriber_url": store.subscriber_url,
+            "signing_public_key": pub_b64,
+            "key_id": "k1",
+        }
