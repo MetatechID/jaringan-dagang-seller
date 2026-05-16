@@ -204,15 +204,17 @@ def _str_or_none(v: Any) -> str | None:
 
 
 def _summarize(items: list[ImportedItem]) -> dict[str, int]:
+    """Mutually-exclusive buckets so new+update+warn+error == total.
+
+    new vs update can't be known here without DB lookup — the applier
+    distinguishes them. Preview shows 'new' for any non-warn, non-error row.
+    """
     new = update = warn = error = 0
     for it in items:
         if it.errors:
             error += 1
-            continue
-        if it.warnings:
+        elif it.warnings:
             warn += 1
-        # new vs update is decided in the applier; preview counts are estimates
-        # based on (source_item_id, source_variant_id) presence which the
-        # adapter populated — but we can't query DB here. Default to 'new'.
-        new += 1
+        else:
+            new += 1
     return {"new": new, "update": update, "warn": warn, "error": error, "total": len(items)}
