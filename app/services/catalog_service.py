@@ -13,6 +13,7 @@ from app.models.category import Category
 from app.models.product import Product, ProductStatus
 from app.models.product_image import ProductImage
 from app.models.sku import SKU
+from app.models.sku_image import SKUImage
 
 
 async def list_products(
@@ -28,7 +29,10 @@ async def list_products(
     stmt = (
         select(Product)
         .where(Product.store_id == store_id)
-        .options(selectinload(Product.images), selectinload(Product.skus))
+        .options(
+            selectinload(Product.images),
+            selectinload(Product.skus).selectinload(SKU.images),
+        )
         .offset(offset)
         .limit(limit)
         .order_by(Product.created_at.desc())
@@ -52,7 +56,7 @@ async def get_product(
         .where(Product.id == product_id)
         .options(
             selectinload(Product.images),
-            selectinload(Product.skus),
+            selectinload(Product.skus).selectinload(SKU.images),
             selectinload(Product.category),
         )
     )
@@ -84,7 +88,19 @@ async def create_product(
         )
 
     for sku_data in skus_data:
-        db.add(SKU(product_id=product.id, **sku_data))
+        sku_images_data = sku_data.pop("images", [])
+        sku = SKU(product_id=product.id, **sku_data)
+        db.add(sku)
+        await db.flush()
+        for idx, img in enumerate(sku_images_data):
+            db.add(
+                SKUImage(
+                    sku_id=sku.id,
+                    url=img["url"],
+                    position=img.get("position", idx),
+                    is_primary=img.get("is_primary", idx == 0),
+                )
+            )
 
     await db.flush()
 
@@ -143,7 +159,10 @@ async def search_products(
                 Product.status == ProductStatus.ACTIVE,
             )
         )
-        .options(selectinload(Product.images), selectinload(Product.skus))
+        .options(
+            selectinload(Product.images),
+            selectinload(Product.skus).selectinload(SKU.images),
+        )
         .limit(limit)
     )
 

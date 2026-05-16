@@ -43,6 +43,11 @@ class SKU(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     marketplace_maps: Mapped[list["MarketplaceProductMap"]] = relationship(  # noqa: F821
         back_populates="sku", cascade="all, delete-orphan"
     )
+    images: Mapped[list["SKUImage"]] = relationship(  # noqa: F821
+        back_populates="sku",
+        cascade="all, delete-orphan",
+        order_by="SKUImage.position",
+    )
 
     def __repr__(self) -> str:
         return f"<SKU(id={self.id}, sku_code='{self.sku_code}', price={self.price})>"

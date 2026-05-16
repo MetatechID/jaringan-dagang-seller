@@ -54,9 +54,22 @@ class BecknCatalogBuilder:
         return images
 
     @staticmethod
+    def _build_sku_images(sku: SKU) -> list[Image]:
+        """Convert SKUImage rows (per-variant gallery) to Beckn Image objects."""
+        sku_images = getattr(sku, "images", None) or []
+        return [Image(url=img.url) for img in sorted(sku_images, key=lambda i: i.position)]
+
+    @staticmethod
     def _sku_to_item(sku: SKU, product: Product) -> Item:
-        """Convert a single SKU (product variant) to a Beckn Item."""
-        images = BecknCatalogBuilder._build_images(product)
+        """Convert a single SKU (product variant) to a Beckn Item.
+
+        Per-variant SKUImages take precedence over parent ProductImages so the
+        buyer-side gallery swaps to the right photo when the user picks a size /
+        flavour / color.
+        """
+        sku_imgs = BecknCatalogBuilder._build_sku_images(sku)
+        product_imgs = BecknCatalogBuilder._build_images(product)
+        images = sku_imgs or product_imgs
 
         item_name = product.name
         if sku.variant_name and sku.variant_value:

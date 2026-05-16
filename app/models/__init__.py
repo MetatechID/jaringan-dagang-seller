@@ -6,6 +6,7 @@ from app.models.category import Category
 from app.models.product import Product, ProductStatus
 from app.models.product_image import ProductImage
 from app.models.sku import SKU
+from app.models.sku_image import SKUImage
 from app.models.order import Order, OrderStatus
 from app.models.payment import PaymentRecord, PaymentStatus
 from app.models.fulfillment import FulfillmentRecord, FulfillmentStatus
@@ -21,6 +22,7 @@ __all__ = [
     "ProductStatus",
     "ProductImage",
     "SKU",
+    "SKUImage",
     "Order",
     "OrderStatus",
     "PaymentRecord",

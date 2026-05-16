@@ -35,6 +35,7 @@ class SKUCreate(BaseModel):
     original_price: float | None = None
     stock: int = 0
     weight_grams: int | None = None
+    images: list[ImageCreate] = Field(default_factory=list)
 
 
 class ProductCreate(BaseModel):
@@ -170,8 +171,19 @@ def _serialize(product) -> dict[str, Any]:
 
     skus = []
     if product.skus:
-        skus = [
-            {
+        for s in product.skus:
+            sku_images = []
+            if s.images:
+                sku_images = [
+                    {
+                        "id": str(img.id),
+                        "url": img.url,
+                        "position": img.position,
+                        "is_primary": img.is_primary,
+                    }
+                    for img in s.images
+                ]
+            skus.append({
                 "id": str(s.id),
                 "variant_name": s.variant_name,
                 "variant_value": s.variant_value,
@@ -180,9 +192,8 @@ def _serialize(product) -> dict[str, Any]:
                 "original_price": float(s.original_price) if s.original_price else None,
                 "stock": s.stock,
                 "weight_grams": s.weight_grams,
-            }
-            for s in product.skus
-        ]
+                "images": sku_images,
+            })
 
     return {
         "id": str(product.id),
