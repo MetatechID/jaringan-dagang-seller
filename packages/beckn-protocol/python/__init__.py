@@ -100,6 +100,13 @@ from .signer import (
     verify_request,
 )
 
+# Registry lookup
+from .registry import (
+    RegistryClient,
+    Subscriber,
+    SubscriberNotFound,
+)
+
 __all__ = [
     # Context
     "BecknAction",
@@ -165,4 +172,8 @@ __all__ = [
     "generate_keypair",
     "sign_request",
     "verify_request",
+    # Registry
+    "RegistryClient",
+    "Subscriber",
+    "SubscriberNotFound",
 ]
