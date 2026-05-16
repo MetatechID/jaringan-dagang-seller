@@ -28,6 +28,32 @@ from nacl.signing import SigningKey
 logger = logging.getLogger(__name__)
 
 
+def load_bpp_signing_key_b64() -> str | None:
+    """Load the BPP's signing private key as base64 from disk or env.
+
+    Order:
+      1. BPP_SIGNING_KEY_B64 env var (base64 directly)
+      2. settings.BPP_SIGNING_KEY_PATH file (base64 text file)
+    Returns None if neither is configured.
+    """
+    env_b64 = os.environ.get("BPP_SIGNING_KEY_B64")
+    if env_b64:
+        return env_b64.strip()
+    key_path = getattr(settings, "BPP_SIGNING_KEY_PATH", None) or "dev/keys/seller.private.b64"
+    if not os.path.isabs(key_path):
+        # resolve relative to seller repo root
+        key_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", key_path))
+    try:
+        with open(key_path) as f:
+            return f.read().strip()
+    except FileNotFoundError:
+        logger.warning("BPP signing key not found at %s — callbacks will be unsigned", key_path)
+        return None
+    except Exception:
+        logger.exception("failed to load BPP signing key")
+        return None
+
+
 def _get_signer(
     signing_private_key_b64: str | None,
 ) -> BecknSigner | None:

@@ -70,14 +70,16 @@ async def _process_and_callback(
             db.add(log_entry)
             await db.commit()
 
-            # Send callback to BAP
+            # Send callback to BAP — signed with the BPP signing key
             bap_uri = context_dict.get("bap_uri", "")
             callback_action = f"on_{action}"
             if bap_uri:
+                from app.beckn.callback_sender import load_bpp_signing_key_b64
                 await send_callback(
                     bap_uri=bap_uri,
                     action=callback_action,
                     response_body=response_body,
+                    signing_private_key_b64=load_bpp_signing_key_b64(),
                 )
 
         except Exception:

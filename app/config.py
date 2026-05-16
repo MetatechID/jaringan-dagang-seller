@@ -50,7 +50,13 @@ class Settings(BaseSettings):
     GATEWAY_URL: Optional[str] = "http://localhost:4030"
     BPP_SUBSCRIBER_ID: str = "bpp.jaringan-dagang.local"
     BPP_SUBSCRIBER_URL: str = "http://localhost:8001"
-    BPP_UNIQUE_KEY_ID: str = "key-1"
+    BPP_UNIQUE_KEY_ID: str = "k1"
+    # Path (relative to repo root or absolute) to the BPP's Ed25519 private key
+    # (base64 raw seed). Used to sign /on_* callbacks.
+    BPP_SIGNING_KEY_PATH: str = "dev/keys/seller.private.b64"
+    # Beli Aman BAP default — used if registry lookup fails or before lookup.
+    BELI_AMAN_BAP_URL: str = "http://localhost:8003/api/v1/beckn"
+    BELI_AMAN_BAP_ID: str = "beli-aman.bap.metatech.id"
     BECKN_DOMAIN: str = "nic2004:52110"
     BECKN_CORE_VERSION: str = "1.1.0"
     BECKN_CITY_CODE: str = "ID:JKT"
