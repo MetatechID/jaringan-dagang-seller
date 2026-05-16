@@ -71,12 +71,11 @@ class BecknCatalogBuilder:
         product_imgs = BecknCatalogBuilder._build_images(product)
         images = sku_imgs or product_imgs
 
-        item_name = product.name
-        if sku.variant_name and sku.variant_value:
-            item_name = f"{product.name} - {sku.variant_value}"
-
+        # Keep descriptor.name as the parent product name so BAPs can group cleanly
+        # by parent_item_id without inheriting a variant suffix. The variant info
+        # is carried in `tags` (and visible on the variant picker).
         descriptor = Descriptor(
-            name=item_name,
+            name=product.name,
             short_desc=product.description[:200] if product.description else None,
             long_desc=product.description,
             images=images or None,
