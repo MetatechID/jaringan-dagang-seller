@@ -152,16 +152,50 @@ async def push_on_search(
             return {"step": "handle_search", "error": f"{type(e).__name__}: {e}", "traceback": traceback.format_exc()[-2000:]}
 
     sig_key = load_bpp_signing_key_b64()
+    # Try sending directly with httpx so we see the real HTTP outcome
+    import json as _json
+    import httpx as _httpx
+    cat = (resp.get("message") or {}).get("catalog") or {}
+    providers_via_canonical = len(cat.get("bpp/providers") or [])
+    providers_via_alt = len(cat.get("providers") or [])
     try:
         ok = await send_callback(
             bap_uri=bap_uri, action="on_search",
             response_body=resp, signing_private_key_b64=sig_key,
         )
-        return {
-            "step": "send_callback", "ok": ok,
-            "had_signing_key": bool(sig_key),
-            "providers": len((resp.get("message", {}).get("catalog", {}) or {}).get("bpp/providers", [])) if resp.get("message") else None,
-            "context_bpp_id": (resp.get("context") or {}).get("bpp_id"),
-        }
     except Exception as e:
-        return {"step": "send_callback", "error": f"{type(e).__name__}: {e}", "traceback": traceback.format_exc()[-2000:]}
+        ok = f"exception: {type(e).__name__}: {e}"
+
+    # Direct POST so we get HTTP status (send_callback swallows non-2xx)
+    direct = {}
+    try:
+        body_bytes = _json.dumps(resp, separators=(",", ":")).encode()
+        from python import BecknSigner
+        from nacl.signing import SigningKey as _SK
+        import base64 as _b64
+        if sig_key:
+            signer = BecknSigner(
+                signing_key=_SK(_b64.b64decode(sig_key)),
+                subscriber_id="bpp.jaringan-dagang.local", unique_key_id="k1",
+            )
+            auth = signer.sign(body_bytes)
+        else:
+            auth = None
+        async with _httpx.AsyncClient(timeout=30) as c:
+            r = await c.post(
+                f"{bap_uri.rstrip('/')}/on_search",
+                content=body_bytes,
+                headers={"Content-Type": "application/json", "Authorization": auth} if auth else {"Content-Type": "application/json"},
+            )
+            direct = {"status": r.status_code, "body": r.text[:400]}
+    except Exception as e:
+        direct = {"error": f"{type(e).__name__}: {e}"}
+
+    return {
+        "step": "send_callback",
+        "send_callback_ok": ok,
+        "had_signing_key": bool(sig_key),
+        "providers_canonical": providers_via_canonical,
+        "providers_alt_key": providers_via_alt,
+        "direct_http": direct,
+    }
