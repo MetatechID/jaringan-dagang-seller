@@ -89,16 +89,15 @@ async def lifespan(app: FastAPI):
     """Startup: DB init + registry registration.  Shutdown: dispose engine."""
     logger.info("Starting %s v%s", settings.APP_NAME, settings.APP_VERSION)
 
-    # Schema is owned by Base.metadata.create_all (checkfirst=True is default,
-    # so this only creates missing tables and is safe to run on every cold
-    # start). The one-time information_schema lookup per container boot is
-    # cheap and removes the need for a separate admin migrate step.
-    try:
-        from app.models import Base
-        async with engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
-    except Exception:
-        logger.warning("Could not connect to database (skipping table creation)", exc_info=True)
+    # Schema is owned by Base.metadata.create_all. Local dev can run
+    # `alembic upgrade head` or set CREATE_TABLES_ON_STARTUP=1 to recreate.
+    if os.getenv("CREATE_TABLES_ON_STARTUP") == "1":
+        try:
+            from app.models import Base
+            async with engine.begin() as conn:
+                await conn.run_sync(Base.metadata.create_all)
+        except Exception:
+            logger.warning("Could not connect to database (skipping table creation)", exc_info=True)
 
     await _register_with_registry()
 
