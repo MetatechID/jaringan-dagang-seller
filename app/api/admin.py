@@ -123,6 +123,46 @@ async def build_catalog_debug(x_admin_token: str = Header(default="")):
     return {"per_store": out, "catalog_providers": providers_count}
 
 
+@router.post("/test-confirm")
+async def test_confirm(sku_id: str, x_admin_token: str = Header(default="")):
+    """Run handle_confirm with a synthetic Beckn /confirm envelope and report what happens."""
+    _check(x_admin_token)
+    from app.database import async_session_factory
+    from app.beckn.handlers import handle_confirm
+    import uuid as _uuid
+    from datetime import datetime as _dt, timezone as _tz
+
+    ctx = {
+        "domain": "retail", "country": "IDN", "city": "ID:JKT",
+        "action": "confirm", "core_version": "1.1.0",
+        "bap_id": "beli-aman.bap.metatech.id",
+        "bap_uri": "https://api.beli-aman.metatech.id/api/v1/beckn",
+        "bpp_id": "bpp.jaringan-dagang.local",
+        "transaction_id": str(_uuid.uuid4()),
+        "message_id": str(_uuid.uuid4()),
+        "timestamp": _dt.now(_tz.utc).isoformat(),
+    }
+    message = {
+        "order": {
+            "id": f"ADMIN-TEST-{_uuid.uuid4().hex[:8].upper()}",
+            "items": [{"id": sku_id, "qty": 1}],
+            "billing": {"name": "Admin Test", "email": "admin@test.local"},
+            "fulfillments": [],
+            "quote": {"price": {"value": "100000", "currency": "IDR"}},
+            "payments": [{"type": "PRE-FULFILLMENT", "status": "PAID",
+                          "params": {"amount": "100000", "currency": "IDR"}}],
+        }
+    }
+    async with async_session_factory() as db:
+        try:
+            resp = await handle_confirm(ctx, message, db)
+            await db.commit()
+            return {"ok": True, "response": resp}
+        except Exception as e:
+            await db.rollback()
+            return {"ok": False, "error": f"{type(e).__name__}: {e}", "traceback": traceback.format_exc()[-2500:]}
+
+
 @router.post("/push-on-search")
 async def push_on_search(
     bap_uri: str = "https://api.beli-aman.metatech.id/api/v1/beckn",
