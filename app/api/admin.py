@@ -27,16 +27,20 @@ async def migrate(x_admin_token: str = Header(default="")):
     expected = os.environ.get("ADMIN_MIGRATE_TOKEN", "") or "oneshot-2026-05-16-heal-schema-D3LtaY7q"
     if x_admin_token != expected:
         raise HTTPException(401, "Bad X-Admin-Token")
-    created = []
-    async with engine.begin() as conn:
-        def _create(sync_conn):
-            for t in Base.metadata.sorted_tables:
-                exists = conn.dialect.has_table(sync_conn, t.name)
-                if not exists:
-                    t.create(sync_conn, checkfirst=True)
-                    created.append(t.name)
-        await conn.run_sync(_create)
-    return {"ok": True, "created_tables": created}
+    try:
+        async with engine.begin() as conn:
+            def _create(sync_conn):
+                Base.metadata.create_all(sync_conn, checkfirst=True)
+            await conn.run_sync(_create)
+        async with engine.begin() as conn:
+            def _list(sync_conn):
+                from sqlalchemy import inspect as sa_inspect
+                return sa_inspect(sync_conn).get_table_names()
+            tables = await conn.run_sync(_list)
+        return {"ok": True, "tables_now": tables}
+    except Exception as e:
+        import traceback
+        raise HTTPException(500, detail=f"{type(e).__name__}: {e}\n{traceback.format_exc()[-2000:]}")
 
 
 @router.get("/db-tables")
