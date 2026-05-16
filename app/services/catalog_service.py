@@ -205,7 +205,7 @@ async def search_products_all_stores(
         .where(Product.status == ProductStatus.ACTIVE)
         .options(
             selectinload(Product.images),
-            selectinload(Product.skus),
+            selectinload(Product.skus).selectinload(SKU.images),
             selectinload(Product.store),
             selectinload(Product.category),
         )
