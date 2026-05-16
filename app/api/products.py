@@ -89,15 +89,19 @@ async def list_products(
     db: AsyncSession = Depends(get_db),
 ):
     """List products for a store."""
-    products = await catalog_service.list_products(
-        db,
-        store_id,
-        status=status,
-        category_id=category_id,
-        offset=offset,
-        limit=limit,
-    )
-    return {"data": [_serialize(p) for p in products]}
+    try:
+        products = await catalog_service.list_products(
+            db,
+            store_id,
+            status=status,
+            category_id=category_id,
+            offset=offset,
+            limit=limit,
+        )
+        return {"data": [_serialize(p) for p in products]}
+    except Exception as e:
+        import traceback
+        raise HTTPException(500, detail=f"{type(e).__name__}: {e}\n{traceback.format_exc()[-1500:]}")
 
 
 @router.post("", status_code=201)
