@@ -90,6 +90,39 @@ async def search_debug(x_admin_token: str = Header(default="")):
     }
 
 
+@router.get("/build-catalog-debug")
+async def build_catalog_debug(x_admin_token: str = Header(default="")):
+    """Trace BecknCatalogBuilder.build_catalog step by step."""
+    _check(x_admin_token)
+    from app.database import async_session_factory
+    from app.services import catalog_service
+    from app.beckn.catalog_builder import BecknCatalogBuilder
+    import uuid
+    async with async_session_factory() as db:
+        products = await catalog_service.search_products_all_stores(db)
+        # Group by store
+        store_map = {}
+        for p in products:
+            sid = p.store_id
+            if sid not in store_map:
+                store_map[sid] = (p.store, [])
+            store_map[sid][1].append(p)
+        out = []
+        for store, prods in store_map.values():
+            try:
+                provider = BecknCatalogBuilder.build_provider(store, prods)
+                out.append({"store": store.name, "provider_items": len(provider.items or []), "provider_id": provider.id})
+            except Exception as e:
+                out.append({"store": store.name, "error": f"{type(e).__name__}: {e}", "traceback": traceback.format_exc()[-1500:]})
+        try:
+            catalog = BecknCatalogBuilder.build_catalog([(s, p) for s, p in store_map.values()])
+            providers_count = len(catalog.providers or [])
+        except Exception as e:
+            providers_count = -1
+            out.append({"build_catalog_error": f"{type(e).__name__}: {e}"})
+    return {"per_store": out, "catalog_providers": providers_count}
+
+
 @router.post("/push-on-search")
 async def push_on_search(
     bap_uri: str = "https://api.beli-aman.metatech.id/api/v1/beckn",
