@@ -60,6 +60,60 @@ async def list_tables(x_admin_token: str = Header(default="")):
     return {"tables": names}
 
 
+@router.post("/seed-membership")
+async def seed_membership(
+    email: str,
+    store_id: str,
+    role: str = "owner",
+    x_admin_token: str = Header(default=""),
+):
+    """Backfill a StoreMembership row. Used to grant a real human access to a
+    store before they sign in (the row will auto-link on their first sign-in)."""
+    _check(x_admin_token)
+    import uuid
+    from datetime import datetime, timezone
+    from sqlalchemy import select
+    from app.database import async_session_factory
+    from app.models.user import User
+    from app.models.store_membership import StoreMembership, StoreRole
+
+    try:
+        sid = uuid.UUID(store_id)
+    except ValueError:
+        raise HTTPException(400, "store_id must be a UUID")
+    try:
+        r = StoreRole(role)
+    except ValueError:
+        raise HTTPException(400, f"role must be one of: {[v.value for v in StoreRole]}")
+
+    email_lc = email.strip().lower()
+    async with async_session_factory() as db:
+        existing = (await db.execute(
+            select(StoreMembership)
+            .where(StoreMembership.store_id == sid)
+            .where(StoreMembership.invited_email == email_lc)
+        )).scalar_one_or_none()
+        target = (await db.execute(select(User).where(User.email == email_lc))).scalar_one_or_none()
+        if existing is not None:
+            existing.role = r
+            if target is not None and existing.user_id is None:
+                existing.user_id = target.id
+                existing.accepted_at = datetime.now(timezone.utc)
+            await db.commit()
+            return {"data": {"id": str(existing.id), "email": email_lc, "role": r.value, "pending": target is None}}
+        m = StoreMembership(
+            user_id=target.id if target else None,
+            invited_email=email_lc,
+            store_id=sid,
+            role=r,
+            accepted_at=datetime.now(timezone.utc) if target else None,
+        )
+        db.add(m)
+        await db.commit()
+        await db.refresh(m)
+        return {"data": {"id": str(m.id), "email": email_lc, "role": r.value, "pending": target is None}}
+
+
 @router.post("/rotate-store-key")
 async def rotate_store_key(
     store_id: str,
