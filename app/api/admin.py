@@ -63,6 +63,8 @@ async def list_tables(x_admin_token: str = Header(default="")):
 @router.post("/rotate-store-key")
 async def rotate_store_key(
     store_id: str,
+    subscriber_id: str | None = None,
+    subscriber_url: str | None = None,
     x_admin_token: str = Header(default=""),
 ):
     """Generate a fresh ed25519 keypair for a store and store the private key
@@ -101,12 +103,22 @@ async def rotate_store_key(
             raise HTTPException(404, f"Store {store_id} not found")
         store.signing_private_key = priv_b64
         store.signing_public_key = pub_b64
+        if subscriber_id:
+            store.subscriber_id = subscriber_id
+        if subscriber_url:
+            store.subscriber_url = subscriber_url
         await db.commit()
         await db.refresh(store)
-        return {
-            "store_id": str(store.id),
-            "subscriber_id": store.subscriber_id,
-            "subscriber_url": store.subscriber_url,
-            "signing_public_key": pub_b64,
-            "key_id": "k1",
-        }
+    # Invalidate any cached signer for this store
+    try:
+        from app.beckn.signing_keys import invalidate_signer_cache
+        invalidate_signer_cache(sid)
+    except Exception:
+        pass
+    return {
+        "store_id": str(store.id),
+        "subscriber_id": store.subscriber_id,
+        "subscriber_url": store.subscriber_url,
+        "signing_public_key": pub_b64,
+        "key_id": "k1",
+    }
