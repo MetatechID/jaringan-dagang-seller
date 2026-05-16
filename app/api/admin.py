@@ -67,6 +67,15 @@ async def seed_membership(
     role: str = "owner",
     x_admin_token: str = Header(default=""),
 ):
+    try:
+        return await _seed_membership_impl(email, store_id, role, x_admin_token)
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, detail=f"{type(e).__name__}: {e}\n{traceback.format_exc()[-2000:]}")
+
+
+async def _seed_membership_impl(email, store_id, role, x_admin_token):
     """Backfill a StoreMembership row. Used to grant a real human access to a
     store before they sign in (the row will auto-link on their first sign-in)."""
     _check(x_admin_token)
