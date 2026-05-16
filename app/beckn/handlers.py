@@ -25,7 +25,7 @@ from app.models.order import Order, OrderStatus
 from app.models.product import Product, ProductStatus
 from app.models.sku import SKU
 from app.models.store import Store
-from app.services import catalog_service, order_service, payment_service
+from app.services import catalog_service, inventory_service, order_service, payment_service
 
 # Make the beckn-protocol package importable
 _proto_path = os.path.abspath(
@@ -318,6 +318,23 @@ async def handle_confirm(
                 "type": "DOMAIN-ERROR",
                 "code": "30004",
                 "message": f"Order {order_id_str} not found",
+            },
+        }
+
+    # Race-safe inventory decrement. Uses SELECT ... FOR UPDATE so two
+    # concurrent confirms for the last unit cannot both succeed.
+    try:
+        await inventory_service.decrement_or_raise(db, order.items or [])
+        await db.flush()
+    except inventory_service.OutOfStock as oos:
+        await db.rollback()
+        logger.warning("OOS at /confirm for order %s: %s", order.id, oos)
+        return {
+            "context": _callback_context(context, "on_confirm"),
+            "error": {
+                "type": "DOMAIN-ERROR",
+                "code": "40002",
+                "message": f"Out of stock: sku={oos.sku_id} have={oos.available} requested={oos.requested}",
             },
         }
 
