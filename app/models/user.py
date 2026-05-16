@@ -34,8 +34,12 @@ class User(TimestampMixin, Base):
         Boolean, default=False, nullable=False
     )
 
+    # StoreMembership has TWO FKs back to users (user_id + invited_by_user_id);
+    # specify foreign_keys so SQLAlchemy knows which one drives this collection.
     memberships: Mapped[list["StoreMembership"]] = relationship(  # noqa: F821
-        back_populates="user", cascade="all, delete-orphan"
+        back_populates="user",
+        cascade="all, delete-orphan",
+        foreign_keys="StoreMembership.user_id",
     )
 
     def __repr__(self) -> str:
