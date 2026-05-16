@@ -56,6 +56,40 @@ async def list_tables(x_admin_token: str = Header(default="")):
     return {"tables": names}
 
 
+@router.get("/search-debug")
+async def search_debug(x_admin_token: str = Header(default="")):
+    """Diagnostic: count what handle_search would find."""
+    _check(x_admin_token)
+    from app.database import async_session_factory
+    from app.services import catalog_service
+    from app.models.product import Product, ProductStatus
+    from sqlalchemy import select, func
+    async with async_session_factory() as db:
+        total = (await db.execute(select(func.count(Product.id)))).scalar()
+        active = (await db.execute(
+            select(func.count(Product.id)).where(Product.status == ProductStatus.ACTIVE)
+        )).scalar()
+        # try the actual search
+        try:
+            products = await catalog_service.search_products_all_stores(db)
+            search_count = len(products)
+            store_map = {}
+            for p in products:
+                sid = p.store_id
+                store_map.setdefault(sid, [p.store.name if p.store else "?", 0])
+                store_map[sid][1] += 1
+            stores = [{"store_id": str(k), "name": v[0], "products": v[1]} for k, v in store_map.items()]
+        except Exception as e:
+            search_count = -1
+            stores = [{"error": f"{type(e).__name__}: {e}"}]
+    return {
+        "total_products": total,
+        "active_products": active,
+        "search_returned": search_count,
+        "stores": stores,
+    }
+
+
 @router.post("/push-on-search")
 async def push_on_search(
     bap_uri: str = "https://api.beli-aman.metatech.id/api/v1/beckn",
