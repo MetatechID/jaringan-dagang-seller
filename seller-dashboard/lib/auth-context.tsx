@@ -59,6 +59,13 @@ const API_BASE =
   process.env.NEXT_PUBLIC_API_BASE ||
   "http://localhost:8001";
 
+// Beli Aman is the network Identity Provider. Identity + ACL (who am I, which
+// stores can I manage) is resolved here. Store *details* (name/logo) still
+// come from the seller catalog API (API_BASE).
+const IDENTITY_BASE =
+  process.env.NEXT_PUBLIC_IDENTITY_API_URL ||
+  "https://api.beli-aman.metatech.id";
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [ready, setReady] = useState(false);
@@ -81,22 +88,84 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         setMyStores([]);
         return;
       }
-      const [r1, r2] = await Promise.all([
-        fetch(`${API_BASE}/api/me`, { headers: { Authorization: `Bearer ${token}` } }),
-        fetch(`${API_BASE}/api/me/stores`, { headers: { Authorization: `Bearer ${token}` } }),
+      const authH = { Authorization: `Bearer ${token}` };
+
+      // 1. Identity + ACL from Beli Aman (the IdP).
+      const [meRes, aclRes] = await Promise.all([
+        fetch(`${IDENTITY_BASE}/api/v1/me`, { headers: authH }),
+        fetch(`${IDENTITY_BASE}/api/v1/me/stores`, { headers: authH }),
       ]);
-      if (r1.ok) {
-        const j = await r1.json();
-        setMe(j.data || null);
-      } else {
-        setMe(null);
+
+      let profile: MeUser | null = null;
+      if (meRes.ok) {
+        const j = await meRes.json();
+        // Beli Aman /api/v1/me returns the profile object directly (not {data})
+        profile = {
+          id: j.id,
+          email: j.email,
+          display_name: j.display_name ?? null,
+          photo_url: j.photo_url ?? null,
+          is_super_admin: !!j.is_super_admin,
+        };
       }
-      if (r2.ok) {
-        const j = await r2.json();
-        setMyStores(j.data || []);
-      } else {
-        setMyStores([]);
+      setMe(profile);
+
+      let acl: { store_id: string; role: string }[] = [];
+      let isSuper = false;
+      if (aclRes.ok) {
+        const j = await aclRes.json();
+        isSuper = !!j.is_super_admin;
+        acl = j.data || [];
       }
+
+      // 2. Store details from the seller catalog API, then join with ACL.
+      let allStores: any[] = [];
+      try {
+        const sRes = await fetch(`${API_BASE}/api/stores`);
+        if (sRes.ok) {
+          const sj = await sRes.json();
+          allStores = sj.data || [];
+        }
+      } catch {
+        /* seller API optional for the list; ACL is authoritative */
+      }
+
+      let stores: MyStore[];
+      if (isSuper || profile?.is_super_admin) {
+        stores = allStores.map((s) => ({
+          id: s.id,
+          subscriber_id: s.subscriber_id,
+          name: s.name,
+          description: s.description ?? null,
+          logo_url: s.logo_url ?? null,
+          domain: s.domain ?? null,
+          city: s.city ?? null,
+          status: s.status,
+          role: "super_admin" as const,
+          membership_id: null,
+        }));
+      } else {
+        const byId = new Map(allStores.map((s) => [s.id, s]));
+        stores = acl
+          .map((m) => {
+            const s = byId.get(m.store_id);
+            if (!s) return null;
+            return {
+              id: s.id,
+              subscriber_id: s.subscriber_id,
+              name: s.name,
+              description: s.description ?? null,
+              logo_url: s.logo_url ?? null,
+              domain: s.domain ?? null,
+              city: s.city ?? null,
+              status: s.status,
+              role: (m.role as "owner" | "staff"),
+              membership_id: (m as any).membership_id ?? null,
+            } as MyStore;
+          })
+          .filter(Boolean) as MyStore[];
+      }
+      setMyStores(stores);
     } finally {
       setLoadingMe(false);
     }
