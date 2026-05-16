@@ -315,7 +315,27 @@ async def handle_confirm(
         # No prior /init in this transaction — auto-create the order from the
         # /confirm payload. This supports the buyer-initiated flow that
         # previously used the seller_bridge HTTP shortcut.
-        store = await _get_default_store(db)
+        # Derive the right Store from the cart's first SKU so the order lands
+        # in the correct toko (not the "first active store" fallback).
+        items_for_store_lookup = order_msg.get("items") or []
+        first_sku_id = None
+        if items_for_store_lookup:
+            first_sku_id = items_for_store_lookup[0].get("sku_id") or items_for_store_lookup[0].get("id")
+        store = None
+        if first_sku_id:
+            try:
+                _sku_uuid = uuid.UUID(first_sku_id)
+                _sku_row = (await db.execute(
+                    select(SKU)
+                    .where(SKU.id == _sku_uuid)
+                    .options(selectinload(SKU.product).selectinload(Product.store))
+                )).scalar_one_or_none()
+                if _sku_row and _sku_row.product:
+                    store = _sku_row.product.store
+            except (ValueError, TypeError):
+                pass
+        if store is None:
+            store = await _get_default_store(db)
         if store is None:
             return {
                 "context": _callback_context(context, "on_confirm"),
