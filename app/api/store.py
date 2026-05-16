@@ -26,6 +26,17 @@ class StoreUpdate(BaseModel):
     status: str | None = None
 
 
+class StoreCreate(BaseModel):
+    name: str
+    subscriber_id: str
+    subscriber_url: str
+    description: str | None = None
+    logo_url: str | None = None
+    domain: str = "retail"
+    city: str = "ID:JKT"
+    status: str = "active"
+
+
 @stores_router.get("")
 async def list_stores(
     db: AsyncSession = Depends(get_db),
@@ -36,6 +47,52 @@ async def list_stores(
     )
     stores = result.scalars().all()
     return {"data": [_serialize(s) for s in stores]}
+
+
+@stores_router.post("", status_code=201)
+async def create_store(
+    body: StoreCreate,
+    db: AsyncSession = Depends(get_db),
+):
+    """Create a new store. Idempotent by subscriber_id (returns existing if present)."""
+    existing = (
+        await db.execute(
+            select(Store).where(Store.subscriber_id == body.subscriber_id)
+        )
+    ).scalar_one_or_none()
+    if existing is not None:
+        return {"data": _serialize(existing)}
+    store = Store(
+        name=body.name,
+        description=body.description,
+        subscriber_id=body.subscriber_id,
+        subscriber_url=body.subscriber_url,
+        logo_url=body.logo_url,
+        domain=body.domain,
+        city=body.city,
+        status=body.status,
+    )
+    db.add(store)
+    await db.flush()
+    await db.refresh(store)
+    return {"data": _serialize(store)}
+
+
+@stores_router.get("/{store_id}")
+async def get_store_by_id(
+    store_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Get a single store by UUID."""
+    try:
+        sid = uuid.UUID(store_id)
+    except ValueError:
+        raise HTTPException(400, "store_id must be a UUID")
+    result = await db.execute(select(Store).where(Store.id == sid))
+    store = result.scalar_one_or_none()
+    if store is None:
+        raise HTTPException(404, "Store not found")
+    return {"data": _serialize(store)}
 
 
 @router.get("")
