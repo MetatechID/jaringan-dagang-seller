@@ -172,7 +172,10 @@ class BecknCatalogBuilder:
         ]
 
         return Provider(
-            id=str(store.id),
+            # Use the canonical Beckn subscriber_id as Provider.id so BAPs can
+            # mirror by toko identity, not by local UUID. Falls back to UUID
+            # for stores without a subscriber_id yet.
+            id=store.subscriber_id or str(store.id),
             descriptor=provider_descriptor,
             categories=list(categories_seen.values()) or None,
             items=items or None,
