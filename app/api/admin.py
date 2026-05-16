@@ -60,6 +60,63 @@ async def list_tables(x_admin_token: str = Header(default="")):
     return {"tables": names}
 
 
+@router.post("/test-fanout-search")
+async def test_fanout_search(x_admin_token: str = Header(default="")):
+    """Run handle_search end-to-end and trace each per-provider send_callback."""
+    _check(x_admin_token)
+    from app.beckn.handlers import handle_search
+    from app.beckn.callback_sender import load_bpp_signing_key_b64, send_callback
+    from app.beckn.signing_keys import signer_for_subscriber_id
+    from app.database import async_session_factory
+    import uuid as _uuid
+    from datetime import datetime as _dt, timezone as _tz
+    import base64 as _b64
+
+    ctx = {
+        "domain": "retail", "country": "IDN", "city": "ID:JKT",
+        "action": "search", "core_version": "1.1.0",
+        "bap_id": "beli-aman.bap.metatech.id",
+        "bap_uri": "https://api.beli-aman.metatech.id/api/v1/beckn",
+        "transaction_id": str(_uuid.uuid4()), "message_id": str(_uuid.uuid4()),
+        "timestamp": _dt.now(_tz.utc).isoformat(),
+    }
+
+    async with async_session_factory() as db:
+        try:
+            resp = await handle_search(ctx, {"intent": {}}, db)
+        except Exception as e:
+            return {"step": "handle_search", "error": f"{type(e).__name__}: {e}", "traceback": traceback.format_exc()[-1500:]}
+
+        catalog = (resp.get("message") or {}).get("catalog") or {}
+        providers = catalog.get("providers") or catalog.get("bpp/providers") or []
+        per_prov_results = []
+
+        bap_uri = ctx["bap_uri"]
+        for prov in providers:
+            sub_id = prov.get("id")
+            sub = await signer_for_subscriber_id(db, sub_id)
+            priv = _b64.b64encode(bytes(sub.signing_key)).decode() if sub else None
+            per_prov_body = {
+                "context": {**resp["context"], "bpp_id": sub_id},
+                "message": {"catalog": {
+                    **{k: v for k, v in catalog.items() if k not in ("providers", "bpp/providers")},
+                    "providers": [prov],
+                    "bpp/providers": [prov],
+                }},
+            }
+            try:
+                ok = await send_callback(
+                    bap_uri=bap_uri, action="on_search",
+                    response_body=per_prov_body,
+                    signing_private_key_b64=priv or load_bpp_signing_key_b64(),
+                    signer_subscriber_id=sub_id,
+                )
+                per_prov_results.append({"sub": sub_id, "had_per_toko_key": bool(priv), "ok": ok})
+            except Exception as e:
+                per_prov_results.append({"sub": sub_id, "had_per_toko_key": bool(priv), "error": f"{type(e).__name__}: {e}"})
+        return {"providers": per_prov_results}
+
+
 @router.post("/rotate-store-key")
 async def rotate_store_key(
     store_id: str,
