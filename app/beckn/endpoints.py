@@ -31,6 +31,7 @@ from python import AckMessage, AckResponse, AckStatus, BecknRequest
 
 from app.beckn import handlers
 from app.beckn.callback_sender import send_callback
+from app.beckn.middleware import check_idempotency, verify_inbound_signature
 from app.models.beckn_transaction_log import BecknTransactionLog
 
 logger = logging.getLogger(__name__)
@@ -114,6 +115,13 @@ def _make_beckn_endpoint(action: str, handler):
     async def endpoint(
         request: Request,
     ):
+        # 1. Read raw body once for signature verification
+        raw_body = await request.body()
+
+        # 2. Verify Beckn signature (raises HTTPException on failure)
+        await verify_inbound_signature(request, raw_body)
+
+        # 3. Parse body
         try:
             body = await request.json()
             beckn_req = BecknRequest(**body)
@@ -123,8 +131,15 @@ def _make_beckn_endpoint(action: str, handler):
 
         context_dict = beckn_req.context.model_dump(mode="json")
         message_dict = beckn_req.message
+        message_id = context_dict.get("message_id", "")
 
-        # Run processing inline (required for Vercel serverless — no background tasks)
+        # 4. Idempotency: if we've seen this message_id, return cached response
+        async with async_session_factory() as dedupe_db:
+            cached = await check_idempotency(dedupe_db, message_id)
+            if cached is not None:
+                return _ack()  # cached response was the original ACK; reissue
+
+        # 5. Run processing inline (Vercel serverless — no background tasks)
         await _process_and_callback(
             action,
             handler,
