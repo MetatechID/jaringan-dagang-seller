@@ -25,7 +25,9 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 
 
 def _check(token: str) -> None:
-    expected = os.environ.get("ADMIN_MIGRATE_TOKEN", "") or "oneshot-2026-05-16-acl-tables-A8nRpL3kT"
+    expected = os.environ.get("ADMIN_MIGRATE_TOKEN", "")
+    if not expected:
+        raise HTTPException(503, "Admin disabled (set ADMIN_MIGRATE_TOKEN env)")
     if token != expected:
         raise HTTPException(401, "Bad X-Admin-Token")
 
