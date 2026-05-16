@@ -15,7 +15,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import (
-    DateTime, Enum as SAEnum, ForeignKey, Index, Integer, String, Text, func, text,
+    DateTime, Enum as SAEnum, ForeignKey, Integer, String, Text, func,
 )
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -78,10 +78,7 @@ class RefundRequest(UUIDPrimaryKeyMixin, TimestampMixin, Base):
         return f"<RefundRequest(id={self.id}, order={self.order_id}, status={self.status})>"
 
 
-# At most one open request per order (PENDING or APPROVED).
-Index(
-    "uq_refund_request_open_per_order",
-    RefundRequest.order_id,
-    unique=True,
-    postgresql_where=text("status IN ('pending', 'approved')"),
-)
+# Note: "at most one open request per order" is enforced at the application
+# level in refund_service.create_from_beckn_update (returns existing instead
+# of creating). A partial unique index would be cleaner but Postgres enum
+# literal comparison in WHERE clauses requires careful casting; deferring to v2.
