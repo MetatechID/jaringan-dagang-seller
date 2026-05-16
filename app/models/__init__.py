@@ -11,6 +11,7 @@ from app.models.order import Order, OrderStatus
 from app.models.payment import PaymentRecord, PaymentStatus
 from app.models.fulfillment import FulfillmentRecord, FulfillmentStatus
 from app.models.beckn_transaction_log import BecknTransactionLog
+from app.models.beckn_outbound_log import BecknOutboundLog
 from app.models.marketplace_map import MarketplaceProductMap
 
 __all__ = [
@@ -30,5 +31,6 @@ __all__ = [
     "FulfillmentRecord",
     "FulfillmentStatus",
     "BecknTransactionLog",
+    "BecknOutboundLog",
     "MarketplaceProductMap",
 ]
