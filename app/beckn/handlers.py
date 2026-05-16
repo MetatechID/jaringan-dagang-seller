@@ -377,29 +377,41 @@ async def handle_confirm(
             },
         }
 
-    # Transition to ACCEPTED
-    order = await order_service.update_order_status(
-        db, order.id, OrderStatus.ACCEPTED
-    )
+    # Transition to ACCEPTED — set directly to avoid extra ORM round-trips
+    # that can trip MissingGreenlet via lazy column refresh in async ctx.
+    order.status = OrderStatus.ACCEPTED
+    await db.flush()
+    await db.refresh(order)  # pull server-defaulted columns (timestamps) cleanly
+
+    # Cache values we'll need in the response *before* any further DB IO that
+    # might expire the instance.
+    _beckn_id = order.beckn_order_id
+    _items = order.items
+    _billing = order.billing_address
+    _created_at = order.created_at
+    _updated_at = order.updated_at
+    _total = order.total
+    _buyer_email = order.buyer_email
+    _order_id = order.id
 
     # Create Xendit invoice
     payment_record = await payment_service.create_invoice(
         db,
-        order.id,
-        order.total,
-        payer_email=order.buyer_email,
-        description=f"Order {order.beckn_order_id}",
+        _order_id,
+        _total,
+        payer_email=_buyer_email,
+        description=f"Order {_beckn_id}",
     )
 
     return {
         "context": _callback_context(context, "on_confirm"),
         "message": {
             "order": {
-                "id": order.beckn_order_id,
+                "id": _beckn_id,
                 "state": OrderState.ACCEPTED.value,
                 "provider": order_msg.get("provider"),
-                "items": order.items,
-                "billing": order.billing_address,
+                "items": _items,
+                "billing": _billing,
                 "fulfillments": [
                     {
                         "id": "fulfillment-delivery",
@@ -421,8 +433,8 @@ async def handle_confirm(
                         },
                     }
                 ],
-                "created_at": order.created_at.isoformat() if order.created_at else None,
-                "updated_at": order.updated_at.isoformat() if order.updated_at else None,
+                "created_at": _created_at.isoformat() if _created_at else None,
+                "updated_at": _updated_at.isoformat() if _updated_at else None,
             }
         },
     }
