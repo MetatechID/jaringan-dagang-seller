@@ -109,6 +109,9 @@ async def create_product(
     """Create a new product with optional images and SKUs."""
     data = body.model_dump()
     product = await catalog_service.create_product(db, store_id, data)
+    # Push catalog delta to BAPs (Beckn /on_search)
+    from app.beckn.catalog_push import push_catalog_after_commit
+    push_catalog_after_commit(db)
     return {"data": _serialize(product)}
 
 
@@ -135,6 +138,8 @@ async def update_product(
     product = await catalog_service.update_product(db, product_id, data)
     if product is None:
         raise HTTPException(status_code=404, detail="Product not found")
+    from app.beckn.catalog_push import push_catalog_after_commit
+    push_catalog_after_commit(db)
     return {"data": _serialize(product)}
 
 
@@ -147,6 +152,8 @@ async def delete_product(
     deleted = await catalog_service.delete_product(db, product_id)
     if not deleted:
         raise HTTPException(status_code=404, detail="Product not found")
+    from app.beckn.catalog_push import push_catalog_after_commit
+    push_catalog_after_commit(db)
     return None
 
 
