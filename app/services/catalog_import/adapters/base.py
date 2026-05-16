@@ -9,7 +9,8 @@ class SourceAdapter(Protocol):
     name: str
     display_name: str
     file_extensions: tuple[str, ...]
-    hint: str  # one-line UI hint, e.g. "Products → Bulk Export → XLSX"
+    hint: str          # one-line UI hint, e.g. "Products → Bulk Export → XLSX"
+    logo_url: str      # absolute URL to brand logo (~64–128px favicon size)
 
     # canonical_field → source column header (as it appears in row 1 of export)
     default_column_mapping: dict[str, str]

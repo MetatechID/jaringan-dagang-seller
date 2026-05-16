@@ -12,6 +12,7 @@ class ShopeeAdapter:
     display_name = "Shopee"
     file_extensions = (".xlsx",)
     hint = "Shopee Seller Centre → Products → Mass Upload → Download"
+    logo_url = "https://www.google.com/s2/favicons?domain=shopee.co.id&sz=128"
 
     default_column_mapping = {
         "source_item_id": "Parent SKU",

@@ -49,6 +49,7 @@ class SourceInfo(BaseModel):
     display_name: str
     file_extensions: list[str]
     hint: str
+    logo_url: str
     default_column_mapping: dict[str, str]
 
 
@@ -123,6 +124,7 @@ async def list_sources() -> dict:
                 display_name=a.display_name,
                 file_extensions=list(a.file_extensions),
                 hint=a.hint,
+                logo_url=getattr(a, "logo_url", ""),
                 default_column_mapping=a.default_column_mapping,
             ).model_dump()
             for a in list_adapters()

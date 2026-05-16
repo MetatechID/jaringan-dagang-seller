@@ -12,6 +12,7 @@ class LazadaAdapter:
     display_name = "Lazada"
     file_extensions = (".xlsx",)
     hint = "Lazada Seller Center → Products → Manage Products → Bulk Edit → Download"
+    logo_url = "https://www.google.com/s2/favicons?domain=lazada.co.id&sz=128"
 
     default_column_mapping = {
         "source_item_id": "SellerSku",

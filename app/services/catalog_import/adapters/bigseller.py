@@ -13,6 +13,7 @@ class BigSellerAdapter:
     display_name = "BigSeller"
     file_extensions = (".xlsx",)
     hint = "BigSeller → Products → Bulk Export → XLSX"
+    logo_url = "https://www.google.com/s2/favicons?domain=bigseller.com&sz=128"
 
     default_column_mapping = {
         "source_item_id": "Product ID",

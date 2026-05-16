@@ -12,6 +12,7 @@ class TokopediaAdapter:
     display_name = "Tokopedia"
     file_extensions = (".xlsx",)
     hint = "Tokopedia Seller → Produk → Export Produk → Unduh"
+    logo_url = "https://www.google.com/s2/favicons?domain=tokopedia.com&sz=128"
 
     default_column_mapping = {
         "source_item_id": "Kode Produk Induk",

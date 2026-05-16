@@ -180,16 +180,42 @@ function SourcePicker({
           onClick={() => onPick(s)}
           className="card text-left p-5 hover:shadow-md hover:border-brand-300 transition-all"
         >
-          <div className="flex items-start justify-between">
-            <h3 className="font-semibold text-gray-900">{s.display_name}</h3>
-            <span className="text-xs text-gray-400 font-mono">
-              {s.file_extensions.join(" / ")}
-            </span>
+          <div className="flex items-start gap-3">
+            <SourceLogo source={s} />
+            <div className="flex-1 min-w-0">
+              <div className="flex items-start justify-between gap-2">
+                <h3 className="font-semibold text-gray-900 truncate">{s.display_name}</h3>
+                <span className="text-xs text-gray-400 font-mono shrink-0">
+                  {s.file_extensions.join(" / ")}
+                </span>
+              </div>
+              <p className="mt-1.5 text-sm text-gray-500">{s.hint}</p>
+            </div>
           </div>
-          <p className="mt-2 text-sm text-gray-500">{s.hint}</p>
         </button>
       ))}
     </div>
+  );
+}
+
+function SourceLogo({ source }: { source: ImportSourceInfo }) {
+  const [errored, setErrored] = useState(false);
+  if (!source.logo_url || errored) {
+    return (
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-gray-100 text-gray-500">
+        <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 5.25h16.5m-16.5 4.5h16.5m-16.5 4.5h16.5m-16.5 4.5h16.5" />
+        </svg>
+      </div>
+    );
+  }
+  return (
+    <img
+      src={source.logo_url}
+      alt={`${source.display_name} logo`}
+      onError={() => setErrored(true)}
+      className="h-10 w-10 shrink-0 rounded-lg border border-gray-100 bg-white object-contain p-1"
+    />
   );
 }
 

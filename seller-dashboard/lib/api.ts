@@ -395,6 +395,7 @@ export interface ImportSourceInfo {
   display_name: string;
   file_extensions: string[];
   hint: string;
+  logo_url: string;
   default_column_mapping: Record<string, string>;
 }
 

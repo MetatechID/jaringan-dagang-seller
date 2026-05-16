@@ -13,6 +13,8 @@ class GenericAdapter:
     display_name = "Generic (CSV/XLSX)"
     file_extensions = (".csv", ".xlsx")
     hint = "Download the starter template, fill it in, upload"
+    # Generic has no brand; the UI falls back to a spreadsheet icon when this is empty.
+    logo_url = ""
 
     default_column_mapping = {
         "source_item_id": "Parent ID",
