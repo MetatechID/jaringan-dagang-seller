@@ -43,6 +43,47 @@ one Neon Postgres project (two logical databases).
 · Next.js 14 (seller dashboard) · Vercel (serverless) · Firebase Auth (Google)
 · Ed25519 (pynacl) for Beckn signing · Xendit (payments/refunds).
 
+## Jaringan Dagang vs Beli Aman (two things, deliberately separate)
+
+These are **not the same product** and the codebase keeps them apart on purpose:
+
+- **Jaringan Dagang** is the *network* — neutral open-commerce rails built on
+  Beckn. Brand-agnostic infrastructure: the registry, the gateway, the
+  signed-message protocol, and the seller-side BPP/catalog/dashboard tooling
+  (**this repo**). Many participants can join; nothing here is consumer-facing.
+  ("Jaringan Dagang" ≈ "trade network".)
+- **Beli Aman** is a *participant brand* on that network — the consumer-facing
+  buyer app (a Beckn BAP), buyer-protection/escrow, the `*.beliaman.com`
+  storefronts and their Vibe editor, **and** the network Identity Provider.
+  ("Beli Aman" ≈ "buy safely".)
+
+Why it matters in the code:
+- This seller repo is pure Jaringan Dagang — it owns catalog/orders/refunds but
+  **no identity**. It never holds a user table; it asks the Beli Aman IdP "who
+  is this and what stores can they touch".
+- Beli Aman is just one BAP from Beckn's point of view; its role as Identity
+  Provider is an *additional hat*, not a protocol feature. Auth/ACL/`profiles`
+  live in the `beli_aman` DB — the seller-side `users`/`store_memberships`
+  tables here are vestigial.
+- The seller dashboard is Jaringan Dagang-branded (operator tooling); the
+  buyer storefronts are Beli Aman-branded (shopper-facing). One person uses
+  both via a single "Sign in with Beli Aman" identity — that federation is the
+  *only* thing that crosses the brand line, and it crosses it intentionally.
+
+## Vibe — the no-code storefront editor
+
+"Vibe" is the Beli Aman storefront builder (lives in `jaringan-dagang-buyer`,
+not here). Each toko gets a hosted storefront at `<slug>.beliaman.com`; its
+owner/staff customize it through the **Vibe admin** at
+`<slug>.beliaman.com/admin`.
+
+Vibe is **not** this seller dashboard. This dashboard (Jaringan Dagang) manages
+catalog / orders / refunds; Vibe (Beli Aman) manages how the storefront *looks*.
+Both gate on the **same** Beli Aman identity + `store_memberships` ACL, so a
+single `/settings/team` invite here grants Vibe access too. The products a Vibe
+storefront shows come from the buyer-side Beckn mirror this repo feeds via
+`/on_search` — Vibe never writes catalog.
+
 ## Beckn Protocol
 
 Beckn is a **discovery + transaction** protocol — NOT a sync or ACL protocol.
