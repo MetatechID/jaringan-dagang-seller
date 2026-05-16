@@ -172,6 +172,7 @@ from app.api.webhooks import router as webhooks_router  # noqa: E402
 from app.api.refunds import router as refunds_router  # noqa: E402
 from app.api.admin import router as admin_router  # noqa: E402
 from app.api.imports import router as imports_router  # noqa: E402
+from app.api.me import router as me_router  # noqa: E402
 
 # Beckn protocol endpoints under /beckn/ (e.g. POST /beckn/search, POST /beckn/confirm)
 app.include_router(beckn_router, prefix="/beckn")
@@ -186,6 +187,7 @@ app.include_router(insights_router, prefix="/api")
 app.include_router(refunds_router, prefix="/api")
 app.include_router(admin_router, prefix="/api")
 app.include_router(imports_router, prefix="/api")
+app.include_router(me_router, prefix="/api")
 
 # Beli Aman bridge: BAP POSTs escrow orders to /api/internal/escrow-orders
 app.include_router(escrow_orders_router, prefix="/api")
