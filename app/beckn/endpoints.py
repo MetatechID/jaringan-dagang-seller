@@ -91,13 +91,27 @@ async def _process_and_callback(
                         s = await signer_for_subscriber_id(db, resp_bpp_id)
                         if s is not None:
                             per_store_priv_b64 = _b64.b64encode(bytes(s.signing_key)).decode()
-                    await send_callback(
-                        bap_uri=bap_uri,
-                        action=callback_action,
-                        response_body=body,
-                        signing_private_key_b64=per_store_priv_b64 or load_bpp_signing_key_b64(),
-                        signer_subscriber_id=resp_bpp_id,
-                    )
+                    if per_store_priv_b64:
+                        # Sign as the toko
+                        await send_callback(
+                            bap_uri=bap_uri, action=callback_action,
+                            response_body=body,
+                            signing_private_key_b64=per_store_priv_b64,
+                            signer_subscriber_id=resp_bpp_id,
+                        )
+                    else:
+                        # No toko key configured — sign as the process BPP and
+                        # rewrite context.bpp_id so the buyer can verify our
+                        # signature against the process key (avoids "claim toko
+                        # identity with wrong private key" mismatch).
+                        rebranded = {**body, "context": {**body.get("context", {}),
+                                                         "bpp_id": settings.BPP_SUBSCRIBER_ID}}
+                        await send_callback(
+                            bap_uri=bap_uri, action=callback_action,
+                            response_body=rebranded,
+                            signing_private_key_b64=load_bpp_signing_key_b64(),
+                            signer_subscriber_id=settings.BPP_SUBSCRIBER_ID,
+                        )
 
                 catalog = (response_body.get("message") or {}).get("catalog") or {}
                 providers = catalog.get("providers") or catalog.get("bpp/providers") or []
