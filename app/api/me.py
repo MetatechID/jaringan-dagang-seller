@@ -9,6 +9,8 @@ DELETE /api/stores/{store_id}/members/{membership_id}   revoke (owner only)
 
 from __future__ import annotations
 
+import logging
+import traceback
 import uuid
 from typing import Any
 
@@ -16,6 +18,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, EmailStr
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+
+logger = logging.getLogger(__name__)
 
 from app.auth.deps import (
     can_access_store,
@@ -73,7 +77,11 @@ def _serialize_member(m: StoreMembership, u: User | None) -> dict[str, Any]:
 
 @router.get("/me")
 async def get_me(user: User = Depends(get_current_user)) -> dict[str, Any]:
-    return {"data": _serialize_user(user)}
+    try:
+        return {"data": _serialize_user(user)}
+    except Exception as e:
+        logger.exception("/api/me failed")
+        raise HTTPException(500, f"{type(e).__name__}: {e}\n{traceback.format_exc()[-1500:]}")
 
 
 @router.get("/me/stores")
@@ -82,38 +90,42 @@ async def get_my_stores(
     db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     """Stores this user can access. Super admins see every active store."""
-    if user.is_super_admin:
-        stores = (
+    try:
+        if user.is_super_admin:
+            stores = (
+                await db.execute(
+                    select(Store).where(Store.status == "active").order_by(Store.name)
+                )
+            ).scalars().all()
+            return {
+                "data": [
+                    {**_serialize_store(s), "role": "super_admin", "membership_id": None}
+                    for s in stores
+                ]
+            }
+
+        rows = (
             await db.execute(
-                select(Store).where(Store.status == "active").order_by(Store.name)
+                select(StoreMembership, Store)
+                .join(Store, Store.id == StoreMembership.store_id)
+                .where(StoreMembership.user_id == user.id)
+                .where(Store.status == "active")
+                .order_by(Store.name)
             )
-        ).scalars().all()
+        ).all()
         return {
             "data": [
-                {**_serialize_store(s), "role": "super_admin", "membership_id": None}
-                for s in stores
+                {
+                    **_serialize_store(s),
+                    "role": m.role.value if isinstance(m.role, StoreRole) else m.role,
+                    "membership_id": str(m.id),
+                }
+                for (m, s) in rows
             ]
         }
-
-    rows = (
-        await db.execute(
-            select(StoreMembership, Store)
-            .join(Store, Store.id == StoreMembership.store_id)
-            .where(StoreMembership.user_id == user.id)
-            .where(Store.status == "active")
-            .order_by(Store.name)
-        )
-    ).all()
-    return {
-        "data": [
-            {
-                **_serialize_store(s),
-                "role": m.role.value if isinstance(m.role, StoreRole) else m.role,
-                "membership_id": str(m.id),
-            }
-            for (m, s) in rows
-        ]
-    }
+    except Exception as e:
+        logger.exception("/api/me/stores failed")
+        raise HTTPException(500, f"{type(e).__name__}: {e}\n{traceback.format_exc()[-1800:]}")
 
 
 # ------------------------------------------------------------------

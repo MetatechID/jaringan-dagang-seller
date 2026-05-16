@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import logging
 import os
+import traceback
 import uuid
 from datetime import datetime, timezone
 from typing import Annotated
@@ -75,55 +76,67 @@ async def get_current_user(
         raise HTTPException(401, "Firebase token has no email claim")
     display_name = claims.get("name") or claims.get("display_name")
     photo_url = claims.get("picture") or None
-
-    # Find or create user. Prefer firebase_uid match; fall back to email so an
-    # email-invited user gets their pending row claimed on first sign-in.
-    user = (
-        await db.execute(select(User).where(User.firebase_uid == firebase_uid))
-    ).scalar_one_or_none()
-    if user is None:
-        user = (
-            await db.execute(select(User).where(User.email == email))
-        ).scalar_one_or_none()
-
     is_super = email in SUPER_ADMIN_EMAILS
 
-    if user is None:
-        user = User(
-            firebase_uid=firebase_uid,
-            email=email,
-            display_name=display_name,
-            photo_url=photo_url,
-            is_super_admin=is_super,
-        )
-        db.add(user)
-        await db.flush()
-    else:
-        # Backfill missing fields on existing user
-        if not user.firebase_uid and firebase_uid:
-            user.firebase_uid = firebase_uid
-        if display_name and not user.display_name:
-            user.display_name = display_name
-        if photo_url and not user.photo_url:
-            user.photo_url = photo_url
-        if is_super and not user.is_super_admin:
-            user.is_super_admin = True
+    try:
+        # Find or create user. Prefer firebase_uid match; fall back to email
+        user = (
+            await db.execute(select(User).where(User.firebase_uid == firebase_uid))
+        ).scalar_one_or_none()
+        if user is None:
+            user = (
+                await db.execute(select(User).where(User.email == email))
+            ).scalar_one_or_none()
 
-    # Claim any pending invites that match this email and weren't yet linked
-    pending = (
-        await db.execute(
-            select(StoreMembership)
-            .where(StoreMembership.invited_email == email)
-            .where(StoreMembership.user_id.is_(None))
-        )
-    ).scalars().all()
-    for inv in pending:
-        inv.user_id = user.id
-        inv.accepted_at = datetime.now(timezone.utc)
+        if user is None:
+            user = User(
+                firebase_uid=firebase_uid,
+                email=email,
+                display_name=display_name,
+                photo_url=photo_url,
+                is_super_admin=is_super,
+            )
+            db.add(user)
+            await db.flush()
+        else:
+            if not user.firebase_uid and firebase_uid:
+                user.firebase_uid = firebase_uid
+            if display_name and not user.display_name:
+                user.display_name = display_name
+            if photo_url and not user.photo_url:
+                user.photo_url = photo_url
+            if is_super and not user.is_super_admin:
+                user.is_super_admin = True
 
-    await db.commit()
-    await db.refresh(user)
-    return user
+        # Cache attributes BEFORE commit (in case refresh fails)
+        user_id_cached = user.id
+        is_super_cached = user.is_super_admin
+
+        # Claim any pending invites that match this email
+        pending = (
+            await db.execute(
+                select(StoreMembership)
+                .where(StoreMembership.invited_email == email)
+                .where(StoreMembership.user_id.is_(None))
+            )
+        ).scalars().all()
+        for inv in pending:
+            inv.user_id = user_id_cached
+            inv.accepted_at = datetime.now(timezone.utc)
+
+        await db.commit()
+
+        # Re-fetch the user fresh from DB to avoid touching expired/detached state
+        user = (
+            await db.execute(select(User).where(User.id == user_id_cached))
+        ).scalar_one()
+        return user
+    except HTTPException:
+        raise
+    except Exception as e:
+        await db.rollback()
+        logger.exception("get_current_user materialization failed for %s", email)
+        raise HTTPException(500, f"auth materialization failed: {type(e).__name__}: {e}\n{traceback.format_exc()[-1500:]}")
 
 
 async def can_access_store(
