@@ -367,3 +367,110 @@ export async function fetchCrossMerchant(): Promise<CrossMerchantInsights> {
   const storeId = await getStoreId();
   return request<CrossMerchantInsights>(`/insights/cross-merchant?store_id=${storeId}`);
 }
+
+// -- Catalog imports --------------------------------------------------
+
+export type ImportSourceName = "bigseller" | "shopee" | "tokopedia" | "lazada" | "generic";
+
+export interface ImportSourceInfo {
+  name: ImportSourceName;
+  display_name: string;
+  file_extensions: string[];
+  hint: string;
+  default_column_mapping: Record<string, string>;
+}
+
+export interface ImportItemPreview {
+  source_item_id: string;
+  source_variant_id: string | null;
+  parent_group_key: string;
+  name: string;
+  sku_code: string;
+  price: string;
+  stock: number;
+  variant_name: string | null;
+  variant_value: string | null;
+  image_urls: string[];
+  weight_grams: number | null;
+  category_hint: string | null;
+  description: string | null;
+  warnings: string[];
+  errors: string[];
+  row_number: number;
+}
+
+export interface ImportJobView {
+  id: string;
+  store_id: string;
+  source: ImportSourceName;
+  status: "uploaded" | "previewed" | "confirmed" | "applied" | "failed";
+  filename: string;
+  column_mapping: Record<string, string> | null;
+  summary: {
+    new: number;
+    update: number;
+    warn: number;
+    error: number;
+    total: number;
+    created_products?: number;
+    created_skus?: number;
+    updated_skus?: number;
+    skipped?: number;
+    apply_errors?: { row_number: number; sku_code: string; message: string }[];
+  } | null;
+  preview_rows: ImportItemPreview[] | null;
+  detected_headers: string[] | null;
+  error_message: string | null;
+  confirmed_at: string | null;
+  applied_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export async function fetchImportSources(): Promise<ImportSourceInfo[]> {
+  const res = await request<{ data: ImportSourceInfo[] }>(`/imports/sources`);
+  return res.data;
+}
+
+export async function uploadImport(
+  source: ImportSourceName,
+  file: File
+): Promise<ImportJobView> {
+  const storeId = await getStoreId();
+  const fd = new FormData();
+  fd.append("source", source);
+  fd.append("file", file);
+  const res = await fetch(`${API_BASE}/api/imports?store_id=${storeId}`, {
+    method: "POST",
+    body: fd,
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`Upload ${res.status}: ${body}`);
+  }
+  const json = (await res.json()) as { data: ImportJobView };
+  return json.data;
+}
+
+export async function fetchImport(jobId: string): Promise<ImportJobView> {
+  const res = await request<{ data: ImportJobView }>(`/imports/${jobId}`);
+  return res.data;
+}
+
+export async function updateImportMapping(
+  jobId: string,
+  columnMapping: Record<string, string>
+): Promise<ImportJobView> {
+  const res = await request<{ data: ImportJobView }>(`/imports/${jobId}/mapping`, {
+    method: "PATCH",
+    body: JSON.stringify({ column_mapping: columnMapping }),
+  });
+  return res.data;
+}
+
+export async function confirmImport(jobId: string): Promise<ImportJobView> {
+  const res = await request<{ data: ImportJobView }>(`/imports/${jobId}/confirm`, {
+    method: "POST",
+  });
+  return res.data;
+}
