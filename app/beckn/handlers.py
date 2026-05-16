@@ -312,14 +312,53 @@ async def handle_confirm(
 
     order = await order_service.get_order_by_beckn_id(db, order_id_str)
     if order is None:
-        return {
-            "context": _callback_context(context, "on_confirm"),
-            "error": {
-                "type": "DOMAIN-ERROR",
-                "code": "30004",
-                "message": f"Order {order_id_str} not found",
+        # No prior /init in this transaction — auto-create the order from the
+        # /confirm payload. This supports the buyer-initiated flow that
+        # previously used the seller_bridge HTTP shortcut.
+        store = await _get_default_store(db)
+        if store is None:
+            return {
+                "context": _callback_context(context, "on_confirm"),
+                "error": {
+                    "type": "DOMAIN-ERROR",
+                    "code": "30001",
+                    "message": "No active store configured",
+                },
+            }
+        billing = order_msg.get("billing") or {}
+        ship_addr = None
+        fulfillments = order_msg.get("fulfillments") or []
+        if fulfillments:
+            ship_addr = (fulfillments[0].get("end") or {}).get("location", {}).get("address")
+        items_msg = order_msg.get("items") or []
+        # Items may already use the buyer's `{sku_id, qty}` shape OR Beckn's
+        # `{id, quantity.selected.count}`. Normalize.
+        normalized_items: list[dict] = []
+        total_from_items = 0
+        for it in items_msg:
+            sku_id = it.get("sku_id") or it.get("id")
+            qty = it.get("qty")
+            if qty is None:
+                qty = (it.get("quantity") or {}).get("selected", {}).get("count") or \
+                      (it.get("quantity") or {}).get("count") or 1
+            normalized_items.append({"sku_id": str(sku_id), "qty": int(qty)})
+        try:
+            quote_total = int(((order_msg.get("quote") or {}).get("price") or {}).get("value") or 0)
+        except (TypeError, ValueError):
+            quote_total = 0
+        order = await order_service.create_order(
+            db, store.id,
+            {
+                "beckn_order_id": order_id_str or f"JD-{uuid.uuid4().hex[:12].upper()}",
+                "buyer_name": billing.get("name") or billing.get("display_name"),
+                "buyer_phone": billing.get("phone"),
+                "buyer_email": billing.get("email"),
+                "billing_address": billing,
+                "shipping_address": ship_addr,
+                "total": quote_total or total_from_items,
+                "items": normalized_items,
             },
-        }
+        )
 
     # Race-safe inventory decrement. Uses SELECT ... FOR UPDATE so two
     # concurrent confirms for the last unit cannot both succeed.
