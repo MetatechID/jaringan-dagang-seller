@@ -199,6 +199,10 @@ class Item(BaseModel):
     model_config = {"populate_by_name": True}
 
     id: str = Field(..., description="Unique item identifier")
+    parent_item_id: Optional[str] = Field(
+        default=None,
+        description="Parent item id, for grouping variants under one product",
+    )
     descriptor: Optional[Descriptor] = Field(
         default=None,
         description="Item descriptor with name, description, images",

@@ -97,8 +97,21 @@ class BecknCatalogBuilder:
         if product.category and product.category.beckn_category_id:
             category_ids = [product.category.beckn_category_id]
 
+        # Variant info as Beckn tags so the BAP can re-group + render variant pickers.
+        # Each TagValue has {descriptor.code, value} since plain `code` isn't part of
+        # the TagValue schema (it's on Tag, the group level).
+        variant_tags = None
+        if sku.variant_name or sku.variant_value:
+            variant_tags = [{
+                "code": "variant",
+                "list": [
+                    {"descriptor": {"code": "name"}, "value": sku.variant_name or ""},
+                    {"descriptor": {"code": "value"}, "value": sku.variant_value or ""},
+                ],
+            }]
         return Item(
             id=str(sku.id),
+            parent_item_id=str(product.id),  # groups all SKUs of one product
             descriptor=descriptor,
             price=price,
             quantity=quantity,
@@ -107,6 +120,7 @@ class BecknCatalogBuilder:
             payment_ids=["payment-prepaid"],
             matched=True,
             rateable=True,
+            tags=variant_tags,
         )
 
     # ------------------------------------------------------------------
