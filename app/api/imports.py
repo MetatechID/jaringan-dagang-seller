@@ -181,6 +181,9 @@ async def create_import(
     job.summary = summary
     job.status = ImportJobStatus.PREVIEWED
     await db.commit()
+    # Async sessions expire ORM attributes after commit; refresh so the
+    # serializer can access timestamps without triggering a lazy load.
+    await db.refresh(job)
 
     return {"data": _serialize(job, detected_headers=headers)}
 
@@ -221,6 +224,7 @@ async def update_mapping(
 
     job.column_mapping = body.column_mapping
     await db.commit()
+    await db.refresh(job)
     return {"data": _serialize(job)}
 
 
@@ -264,6 +268,7 @@ async def confirm_import(
         "apply_errors": result.errors[:50],  # cap to avoid bloating JSONB
     }
     await db.commit()
+    await db.refresh(job)
 
     # Fire Beckn catalog push (best-effort, fire-and-forget)
     try:
