@@ -1,14 +1,32 @@
 const API_BASE = process.env.NEXT_PUBLIC_BPP_API_URL || "http://localhost:8001";
 
+// AuthProvider stashes a token-getter here at mount time. If unset (e.g.
+// Firebase not configured), requests go out unauthed and the backend falls
+// back to legacy non-ACL behavior.
+type TokenGetter = () => Promise<string | null>;
+let _getIdToken: TokenGetter | null = null;
+export function setIdTokenGetter(fn: TokenGetter | null): void {
+  _getIdToken = fn;
+}
+
 async function request<T>(
   path: string,
   options?: RequestInit
 ): Promise<T> {
   const url = `${API_BASE}/api${path}`;
-  const res = await fetch(url, {
-    headers: { "Content-Type": "application/json", ...options?.headers },
-    ...options,
-  });
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    ...(options?.headers as Record<string, string> | undefined),
+  };
+  if (_getIdToken) {
+    try {
+      const tok = await _getIdToken();
+      if (tok) headers["Authorization"] = `Bearer ${tok}`;
+    } catch {
+      // best-effort; let the unauthed call hit the server
+    }
+  }
+  const res = await fetch(url, { headers, ...options });
   if (!res.ok) {
     const body = await res.text().catch(() => "");
     throw new Error(`API ${res.status}: ${body}`);

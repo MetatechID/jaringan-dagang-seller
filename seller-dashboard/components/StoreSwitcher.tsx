@@ -7,6 +7,7 @@ import {
   setSelectedStoreId,
   type StoreSettings,
 } from "@/lib/api";
+import { useAuth } from "@/lib/auth-context";
 
 export default function StoreSwitcher() {
   const [stores, setStores] = useState<StoreSettings[]>([]);
@@ -15,23 +16,52 @@ export default function StoreSwitcher() {
   const [search, setSearch] = useState("");
   const dropdownRef = useRef<HTMLDivElement>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+  const { firebaseConfigured, myStores, ready } = useAuth();
 
   useEffect(() => {
+    if (firebaseConfigured) {
+      // ACL-aware path: only stores the signed-in user has membership in
+      // (super_admin gets all).
+      if (!ready) return;
+      const list = myStores.map((s) => ({
+        id: s.id,
+        subscriber_id: s.subscriber_id,
+        subscriber_url: "",
+        name: s.name,
+        description: s.description,
+        logo_url: s.logo_url,
+        domain: s.domain,
+        city: s.city,
+        signing_public_key: null,
+        status: s.status,
+        created_at: "",
+        updated_at: "",
+      })) as StoreSettings[];
+      setStores(list);
+      const selectedId = getSelectedStoreId();
+      const match = list.find((s) => s.id === selectedId);
+      setCurrent(match || list[0] || null);
+      if (!selectedId && list[0]) {
+        setSelectedStoreId(list[0].id);
+      } else if (selectedId && !match && list[0]) {
+        // Selected store no longer in user's allowed list — switch to first allowed
+        setSelectedStoreId(list[0].id);
+      }
+      return;
+    }
+    // Legacy unauthed dev path: show all stores
     fetchStores()
       .then((list) => {
         setStores(list);
         const selectedId = getSelectedStoreId();
         const match = list.find((s) => s.id === selectedId);
         setCurrent(match || list[0] || null);
-        // Ensure localStorage is set if it wasn't already
         if (!selectedId && list[0]) {
           setSelectedStoreId(list[0].id);
         }
       })
-      .catch(() => {
-        // Silently fail - sidebar will show fallback
-      });
-  }, []);
+      .catch(() => {});
+  }, [firebaseConfigured, ready, myStores]);
 
   // Close dropdown on outside click
   useEffect(() => {
