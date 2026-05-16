@@ -105,3 +105,28 @@ async def biteship_webhook(request: Request) -> dict:
         logger.exception("failed to enqueue /on_status emit for %s", order_id)
 
     return {"ok": True, "event_id": event_id, "order_id": str(order_id)}
+
+
+@router.post("/xendit")
+async def xendit_webhook(request: Request) -> dict:
+    """Receive Xendit refund/invoice webhooks.
+
+    Verifies via X-Callback-Token header (Xendit's standard). Routes to:
+      - refund.succeeded → refund_service.settle()
+    """
+    token = request.headers.get("X-Callback-Token", "")
+    expected = os.environ.get("XENDIT_WEBHOOK_TOKEN") or ""
+    if expected and token != expected:
+        raise HTTPException(401, "Bad X-Callback-Token")
+    try:
+        evt: dict[str, Any] = await request.json()
+    except Exception:
+        raise HTTPException(400, "Malformed JSON")
+    event = evt.get("event") or evt.get("status")
+    if event in ("refund.succeeded", "REFUND_SUCCEEDED"):
+        refund_id = (evt.get("data") or {}).get("id") or evt.get("id")
+        if refund_id:
+            from app.services import refund_service
+            async with async_session_factory() as session:
+                await refund_service.settle(session, refund_id)
+    return {"ok": True}

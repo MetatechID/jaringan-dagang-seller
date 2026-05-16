@@ -602,10 +602,50 @@ async def handle_update(
     message: dict[str, Any],
     db: AsyncSession,
 ) -> dict[str, Any]:
-    """Update order (e.g. address change, item substitution)."""
+    """Update order (e.g. address change, item substitution, refund request)."""
     order_msg = message.get("order", {})
     order_id_str = order_msg.get("id")
     update_target = message.get("update_target")
+
+    # Refund-request branch: buyer asks for a refund via fulfillment_state
+    # descriptor.code = "refund_request".
+    fstate = (order_msg.get("fulfillment_state") or {}).get("descriptor") or {}
+    if fstate.get("code") == "refund_request":
+        from app.services import refund_service
+        reason_code = fstate.get("short_desc")
+        reason_text = fstate.get("name")
+        try:
+            amount = int(((order_msg.get("payment") or {}).get("params") or {}).get("amount") or 0)
+        except (TypeError, ValueError):
+            amount = 0
+        req = await refund_service.create_from_beckn_update(
+            db,
+            order_beckn_id=order_id_str or "",
+            reason_code=reason_code,
+            reason_text=reason_text,
+            requested_amount=amount or None,
+        )
+        if req is None:
+            return {
+                "context": _callback_context(context, "on_update"),
+                "error": {
+                    "type": "DOMAIN-ERROR",
+                    "code": "30004",
+                    "message": f"Order {order_id_str} not found",
+                },
+            }
+        return {
+            "context": _callback_context(context, "on_update"),
+            "message": {
+                "order": {
+                    "id": order_id_str,
+                    "tags": [{
+                        "code": "refund_pending",
+                        "list": [{"code": "refund_request_id", "value": str(req.id)}],
+                    }],
+                }
+            },
+        }
 
     order = await order_service.get_order_by_beckn_id(db, order_id_str)
     if order is None:
