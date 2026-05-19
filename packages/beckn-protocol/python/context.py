@@ -2,6 +2,13 @@
 
 Every Beckn request/response carries a BecknContext that identifies the
 transaction, participants, action, and addressing information.
+
+The ``domain`` field is a free string and intentionally accepts both raw
+Beckn transport domains (e.g. ``nic2004:52110``) and ONDC localization
+codes (e.g. ``ONDC:RET11``). Callers should resolve the per-store ONDC
+code via ``python.domain_resolver.resolve_ondc_domain`` rather than
+hardcoding it. See ``network-extension/domains/retail.yaml`` for the
+ONDC retail taxonomy.
 """
 
 from datetime import datetime

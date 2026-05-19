@@ -31,6 +31,8 @@ _proto_path = os.path.abspath(
 if _proto_path not in sys.path:
     sys.path.insert(0, _proto_path)
 
+from python.domain_resolver import resolve_ondc_domain  # noqa: E402
+
 logger = logging.getLogger(__name__)
 
 # Cached list of BAPs to notify. For v1: just Beli Aman.
@@ -47,8 +49,16 @@ def _known_baps() -> list[tuple[str, str]]:
     return [(bap_id, bap_url)]
 
 
-async def _build_full_catalog_message(db: AsyncSession) -> dict[str, Any]:
-    """Build a full multi-store catalog payload for /on_search."""
+async def _build_full_catalog_message(
+    db: AsyncSession,
+) -> tuple[dict[str, Any], str | None]:
+    """Build a full multi-store catalog payload for /on_search.
+
+    Returns the message plus the single store's ``subscriber_id`` when the
+    catalog contains exactly one store (today: Safiya only) so the envelope
+    can carry that store's ONDC sub-domain; ``None`` when zero or many
+    stores (no single sub-domain fits one multicast envelope).
+    """
     res = await db.execute(
         select(Store)
         .where(Store.status == "active")
@@ -62,14 +72,27 @@ async def _build_full_catalog_message(db: AsyncSession) -> dict[str, Any]:
         (s, list(s.products or [])) for s in stores if s.products
     ]
     if not pairs:
-        return {"catalog": {"bpp/providers": []}}
+        return {"catalog": {"bpp/providers": []}}, None
+    single_store_subscriber_id = (
+        pairs[0][0].subscriber_id if len(pairs) == 1 else None
+    )
     catalog = BecknCatalogBuilder.build_catalog(pairs)
-    return {"catalog": catalog.model_dump(exclude_none=True)}
+    return (
+        {"catalog": catalog.model_dump(exclude_none=True)},
+        single_store_subscriber_id,
+    )
 
 
-def _build_context(bap_id: str, bap_uri: str) -> dict[str, Any]:
+def _build_context(
+    bap_id: str, bap_uri: str, *, store_subscriber_id: str | None = None
+) -> dict[str, Any]:
+    # Per-store ONDC domain code (Safiya -> ONDC:RET11). When the catalog
+    # spans multiple stores no single sub-domain fits one envelope, so we
+    # leave store_subscriber_id=None and the resolver returns the
+    # store-level ONDC:RET default. The Beckn transport base
+    # (settings.BECKN_DOMAIN) is unchanged by this layer.
     return {
-        "domain": settings.BECKN_DOMAIN,
+        "domain": resolve_ondc_domain(store_subscriber_id).domain_code,
         "country": settings.BECKN_COUNTRY_CODE,
         "city": settings.BECKN_CITY_CODE,
         "action": "on_search",
@@ -86,11 +109,13 @@ def _build_context(bap_id: str, bap_uri: str) -> dict[str, Any]:
 
 async def push_catalog(db: AsyncSession) -> None:
     """Push current catalog to all known BAPs. Best-effort; logs failures."""
-    msg = await _build_full_catalog_message(db)
+    msg, store_subscriber_id = await _build_full_catalog_message(db)
     signing_key = load_bpp_signing_key_b64()
     targets = _known_baps()
     for bap_id, bap_uri in targets:
-        ctx = _build_context(bap_id, bap_uri)
+        ctx = _build_context(
+            bap_id, bap_uri, store_subscriber_id=store_subscriber_id
+        )
         body = {"context": ctx, "message": msg}
         try:
             ok = await send_callback(

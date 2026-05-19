@@ -57,9 +57,13 @@ class Settings(BaseSettings):
     # Beli Aman BAP default — used if registry lookup fails or before lookup.
     BELI_AMAN_BAP_URL: str = "http://localhost:8003/api/v1/beckn"
     BELI_AMAN_BAP_ID: str = "beli-aman.bap.metatech.id"
+    # Beckn transport base for the ONDC:RET (retail) family. The ONDC
+    # domain *code* emitted in the context (e.g. ONDC:RET11 for Safiya) is
+    # resolved per-store by python.domain_resolver.resolve_ondc_domain;
+    # this stays the underlying spec-level base, unchanged by that layer.
     BECKN_DOMAIN: str = "nic2004:52110"
-    BECKN_CORE_VERSION: str = "1.1.0"
-    BECKN_CITY_CODE: str = "ID:JKT"
+    BECKN_CORE_VERSION: str = "1.1.0"  # Beckn core spec version (distinct from ONDC domain code)
+    BECKN_CITY_CODE: str = "std:021"  # Jakarta — canonical code from network-extension/cities.yaml
     BECKN_COUNTRY_CODE: str = "IDN"
 
     # --- Xendit Payment Gateway ---

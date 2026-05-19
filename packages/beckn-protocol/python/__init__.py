@@ -107,6 +107,14 @@ from .registry import (
     SubscriberNotFound,
 )
 
+# ONDC domain resolution (per-store domain code on top of the Beckn base)
+from .domain_resolver import (
+    DEFAULT_ONDC_DOMAIN,
+    ONDC_RETAIL_BECKN_BASE,
+    OndcDomain,
+    resolve_ondc_domain,
+)
+
 __all__ = [
     # Context
     "BecknAction",
@@ -176,4 +184,9 @@ __all__ = [
     "RegistryClient",
     "Subscriber",
     "SubscriberNotFound",
+    # ONDC domain resolution
+    "DEFAULT_ONDC_DOMAIN",
+    "ONDC_RETAIL_BECKN_BASE",
+    "OndcDomain",
+    "resolve_ondc_domain",
 ]

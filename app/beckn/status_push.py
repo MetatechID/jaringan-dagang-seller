@@ -30,12 +30,25 @@ _proto_path = os.path.abspath(
 if _proto_path not in sys.path:
     sys.path.insert(0, _proto_path)
 
+from python.domain_resolver import resolve_ondc_domain  # noqa: E402
+
 logger = logging.getLogger(__name__)
 
 
-def _ctx(*, bap_id: str, bap_uri: str, bpp_id: str, bpp_uri: str, txn_id: str) -> dict[str, Any]:
+def _ctx(
+    *,
+    bap_id: str,
+    bap_uri: str,
+    bpp_id: str,
+    bpp_uri: str,
+    txn_id: str,
+    store_subscriber_id: str | None = None,
+) -> dict[str, Any]:
+    # Per-store ONDC domain code (Safiya -> ONDC:RET11); unknown/missing
+    # store falls back to the store-level ONDC:RET default. The Beckn
+    # transport base (settings.BECKN_DOMAIN) is unchanged by this layer.
     return {
-        "domain": settings.BECKN_DOMAIN,
+        "domain": resolve_ondc_domain(store_subscriber_id).domain_code,
         "country": settings.BECKN_COUNTRY_CODE,
         "city": settings.BECKN_CITY_CODE,
         "action": "on_status",
@@ -84,12 +97,14 @@ async def emit_on_status_for_order(order_id) -> bool:
     bap_uri = settings.BELI_AMAN_BAP_URL
     bpp_id = settings.BPP_SUBSCRIBER_ID
     bpp_uri = settings.BPP_SUBSCRIBER_URL
+    store_subscriber_id = store.subscriber_id
 
     body = {
         "context": _ctx(
             bap_id=bap_id, bap_uri=bap_uri,
             bpp_id=bpp_id, bpp_uri=bpp_uri,
             txn_id=str(order.id),
+            store_subscriber_id=store_subscriber_id,
         ),
         "message": {
             "order": {
