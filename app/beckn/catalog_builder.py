@@ -50,18 +50,70 @@ class BecknCatalogBuilder:
     # ------------------------------------------------------------------
 
     @staticmethod
-    def _build_images(product: Product) -> list[Image]:
-        """Convert ProductImage rows to Beckn Image objects."""
+    def _resolve_image_url(stored: str | None, base: str | None) -> str:
+        """Resolve a stored image URL into a fetchable absolute URL (Task A7).
+
+        Image rows in the seller catalog store **host-agnostic relative paths**
+        (e.g. ``/brands/safiyafood/products/madu-akasia-front.svg``); the
+        per-store ``Store.image_base_url`` (e.g. ``https://safiya.beliaman.com``)
+        is prepended at the moment Beckn ``Item.images[].url`` is constructed.
+
+        Compatibility with legacy absolute URLs is preserved: if ``stored`` is
+        already absolute (``http://`` or ``https://``), it passes through
+        unchanged so a half-migrated DB still emits the same shape it has
+        today. The data migration handles rewrites separately.
+
+        Edge behaviours:
+
+          * ``stored`` None / empty -> ``""`` (the caller decides whether to
+            skip the image or emit a blank url field).
+          * ``base`` None / empty -> if ``stored`` is relative, return the path
+            unchanged (better than fabricating an origin).
+          * Trailing slash on ``base`` is idempotent — no double-slash in the
+            joined URL.
+          * Stored value without a leading slash is tolerated and joined
+            cleanly.
+        """
+        if not stored:
+            return ""
+        if stored.startswith("http://") or stored.startswith("https://"):
+            return stored
+        if not base:
+            return stored
+        base_trim = base.rstrip("/")
+        path = stored if stored.startswith("/") else f"/{stored}"
+        return f"{base_trim}{path}"
+
+    @staticmethod
+    def _build_images(
+        product: Product, image_base_url: str | None = None
+    ) -> list[Image]:
+        """Convert ProductImage rows to Beckn Image objects, resolving each
+        stored URL against the per-store ``image_base_url`` (Task A7)."""
         images: list[Image] = []
         for img in sorted(product.images, key=lambda i: i.position):
-            images.append(Image(url=img.url))
+            resolved = BecknCatalogBuilder._resolve_image_url(
+                img.url, image_base_url
+            )
+            if resolved:
+                images.append(Image(url=resolved))
         return images
 
     @staticmethod
-    def _build_sku_images(sku: SKU) -> list[Image]:
-        """Convert SKUImage rows (per-variant gallery) to Beckn Image objects."""
+    def _build_sku_images(
+        sku: SKU, image_base_url: str | None = None
+    ) -> list[Image]:
+        """Convert SKUImage rows (per-variant gallery) to Beckn Image objects,
+        resolving each stored URL against the per-store base (Task A7)."""
         sku_images = getattr(sku, "images", None) or []
-        return [Image(url=img.url) for img in sorted(sku_images, key=lambda i: i.position)]
+        resolved_images: list[Image] = []
+        for img in sorted(sku_images, key=lambda i: i.position):
+            resolved = BecknCatalogBuilder._resolve_image_url(
+                img.url, image_base_url
+            )
+            if resolved:
+                resolved_images.append(Image(url=resolved))
+        return resolved_images
 
     @staticmethod
     def _ondc_item_statutory_tags(product: Product) -> list:
@@ -84,15 +136,20 @@ class BecknCatalogBuilder:
         )
 
     @staticmethod
-    def _sku_to_item(sku: SKU, product: Product) -> Item:
+    def _sku_to_item(
+        sku: SKU, product: Product, image_base_url: str | None = None
+    ) -> Item:
         """Convert a single SKU (product variant) to a Beckn Item.
 
         Per-variant SKUImages take precedence over parent ProductImages so the
         buyer-side gallery swaps to the right photo when the user picks a size /
         flavour / color.
+
+        ``image_base_url`` (Task A7): the per-store storefront origin used to
+        resolve relative image paths. Legacy absolute URLs pass through unchanged.
         """
-        sku_imgs = BecknCatalogBuilder._build_sku_images(sku)
-        product_imgs = BecknCatalogBuilder._build_images(product)
+        sku_imgs = BecknCatalogBuilder._build_sku_images(sku, image_base_url)
+        product_imgs = BecknCatalogBuilder._build_images(product, image_base_url)
         images = sku_imgs or product_imgs
 
         # Keep descriptor.name as the parent product name so BAPs can group cleanly
@@ -152,15 +209,22 @@ class BecknCatalogBuilder:
     # ------------------------------------------------------------------
 
     @classmethod
-    def product_to_items(cls, product: Product) -> list[Item]:
+    def product_to_items(
+        cls, product: Product, image_base_url: str | None = None
+    ) -> list[Item]:
         """Convert a Product with its SKUs into a list of Beckn Items.
 
         Each SKU becomes its own Beckn Item (since they may have different
         prices and stock levels).
+
+        ``image_base_url`` (Task A7) is forwarded so each Item's images get
+        resolved against the owning store's storefront origin.
         """
         if not product.skus:
             return []
-        return [cls._sku_to_item(sku, product) for sku in product.skus]
+        return [
+            cls._sku_to_item(sku, product, image_base_url) for sku in product.skus
+        ]
 
     # ------------------------------------------------------------------
     # Provider builder
@@ -176,8 +240,14 @@ class BecknCatalogBuilder:
         items: list[Item] = []
         categories_seen: dict[str, CategoryId] = {}
 
+        # Task A7: per-store storefront origin (e.g. https://safiya.beliaman.com)
+        # used to resolve relative image paths. None on stores that haven't
+        # been backfilled yet — in which case legacy absolute URLs pass
+        # through unchanged.
+        image_base_url = getattr(store, "image_base_url", None)
+
         for product in products:
-            items.extend(cls.product_to_items(product))
+            items.extend(cls.product_to_items(product, image_base_url))
 
             if product.category and product.category.beckn_category_id:
                 cid = product.category.beckn_category_id

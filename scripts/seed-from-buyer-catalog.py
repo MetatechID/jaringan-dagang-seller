@@ -19,7 +19,10 @@ import urllib.request
 from pathlib import Path
 
 DEFAULT_API_BASE = "http://localhost:8001"
-IMAGE_HOST = "https://partner-demos.jaringan-dagang.metatech.id"
+
+# Task A7: image URLs are stored as host-agnostic relative paths in the
+# seller DB; the catalog builder prepends per-store Store.image_base_url
+# at the Beckn emission boundary. No host prefix here.
 
 CATALOG_DIR = (
     Path(__file__).resolve().parents[1]
@@ -65,8 +68,11 @@ STORES: dict[str, dict] = {
 
 
 def _img(url: str, position: int, is_primary: bool = False) -> dict:
+    # Task A7: preserve relative paths verbatim. Absolute URLs (if any) also
+    # pass through; the catalog builder's _resolve_image_url passes absolute
+    # URLs through unchanged.
     return {
-        "url": f"{IMAGE_HOST}{url}" if url.startswith("/") else url,
+        "url": url,
         "position": position,
         "is_primary": is_primary,
     }

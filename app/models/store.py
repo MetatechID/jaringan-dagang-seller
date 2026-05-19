@@ -19,6 +19,14 @@ class Store(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     logo_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
+    # Per-store storefront origin used to resolve product image URLs at the
+    # Beckn emission boundary (Task A7). Product/SKU rows store host-agnostic
+    # relative paths like "/brands/<slug>/products/<file>.svg"; the catalog
+    # builder prepends this base when constructing Item.images[].url so each
+    # store can have its own storefront origin (Safiya = safiya.beliaman.com,
+    # Antarestar = antarestar.beliaman.com, etc.). NULL = legacy absolute URLs
+    # in image rows are passed through unchanged.
+    image_base_url: Mapped[str | None] = mapped_column(String(512), nullable=True)
     domain: Mapped[str] = mapped_column(
         String(100), nullable=False, default="nic2004:52110"
     )
