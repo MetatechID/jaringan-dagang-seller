@@ -123,3 +123,101 @@ def test_name_to_bpp_id_has_all_known_stores():
             f"_NAME_TO_BPP_ID[{name!r}]={_NAME_TO_BPP_ID.get(name)!r}; "
             f"expected {expected_bpp!r}."
         )
+
+
+# ---------------------------------------------------------------------------
+# Defect 1 (A3 review): the seller-side static-subscribers JSON fallback
+# (consumed by ``RegistryClient._load_static`` when ``REGISTRY_URL`` is
+# unreachable/unset) MUST use canonical ``*.jaringan-dagang.id`` keys so
+# inbound canonical-signed requests from the BAP can be verified offline.
+# ---------------------------------------------------------------------------
+
+
+def _load_dev_static_subscribers() -> dict:
+    """Load ``dev/static-subscribers.json`` from the seller repo root."""
+    import json
+    from pathlib import Path
+
+    p = Path(_ROOT) / "dev" / "static-subscribers.json"
+    assert p.is_file(), f"missing static-subscribers fallback: {p}"
+    return json.loads(p.read_text())
+
+
+def test_dev_static_subscribers_keys_are_canonical():
+    """Every top-level key in dev/static-subscribers.json must satisfy the
+    canonical subscriber_id regex (no legacy ``.metatech.id`` / ``.local``)."""
+    data = _load_dev_static_subscribers()
+    assert data, "dev/static-subscribers.json must not be empty"
+    for sid in data.keys():
+        assert CANONICAL_SUBSCRIBER_ID_RE.match(sid), (
+            f"dev/static-subscribers.json key {sid!r} is NOT canonical."
+        )
+        assert "metatech.id" not in sid, (
+            f"dev/static-subscribers.json key {sid!r} still uses legacy .metatech.id."
+        )
+        assert ".local" not in sid, (
+            f"dev/static-subscribers.json key {sid!r} still uses legacy .local."
+        )
+
+
+def test_dev_static_subscribers_has_all_canonical_entries():
+    """The static fallback must contain the 8 canonical entries:
+    1 BAP + 6 per-store BPPs + 1 single-tenant BPP fallback."""
+    data = _load_dev_static_subscribers()
+    expected = {
+        "beli-aman.bap.jaringan-dagang.id",
+        "safiyafood.jaringan-dagang.id",
+        "antarestar.jaringan-dagang.id",
+        "gendes.jaringan-dagang.id",
+        "yourbrand.jaringan-dagang.id",
+        "matchamu.jaringan-dagang.id",
+        "optimumnutrition.jaringan-dagang.id",
+        "bpp.jaringan-dagang.id",
+    }
+    missing = expected - set(data.keys())
+    assert not missing, (
+        f"dev/static-subscribers.json is missing canonical entries: {sorted(missing)}"
+    )
+
+
+def test_dev_static_subscribers_entries_have_expected_shape():
+    """Each entry must carry ``url``, ``pubkey_b64`` (non-empty) and ``type``
+    matching the registry loader contract."""
+    data = _load_dev_static_subscribers()
+    for sid, meta in data.items():
+        assert isinstance(meta, dict), f"{sid!r} entry is not an object"
+        assert meta.get("url"), f"{sid!r} missing url"
+        assert meta.get("pubkey_b64"), f"{sid!r} missing pubkey_b64"
+        assert meta.get("type") in {"BAP", "BPP"}, (
+            f"{sid!r} has invalid type {meta.get('type')!r}"
+        )
+
+
+def test_dev_static_subscribers_matchamu_pubkey_matches_keyfile():
+    """matchamu pubkey in the static fallback must match dev/keys/matchamu.public.b64."""
+    from pathlib import Path
+
+    data = _load_dev_static_subscribers()
+    entry = data.get("matchamu.jaringan-dagang.id")
+    assert entry, "matchamu.jaringan-dagang.id missing from dev/static-subscribers.json"
+    keyfile = (Path(_ROOT) / "dev" / "keys" / "matchamu.public.b64").read_text().strip()
+    assert entry["pubkey_b64"] == keyfile, (
+        f"matchamu pubkey in static fallback ({entry['pubkey_b64']!r}) "
+        f"does not match dev/keys/matchamu.public.b64 ({keyfile!r})."
+    )
+
+
+def test_dev_static_subscribers_optimumnutrition_pubkey_matches_keyfile():
+    """optimumnutrition pubkey in the static fallback must match its keyfile."""
+    from pathlib import Path
+
+    data = _load_dev_static_subscribers()
+    entry = data.get("optimumnutrition.jaringan-dagang.id")
+    assert entry, "optimumnutrition.jaringan-dagang.id missing from dev/static-subscribers.json"
+    keyfile = (
+        Path(_ROOT) / "dev" / "keys" / "optimumnutrition.public.b64"
+    ).read_text().strip()
+    assert entry["pubkey_b64"] == keyfile, (
+        f"optimumnutrition pubkey in static fallback ({entry['pubkey_b64']!r}) "
+        f"does not match dev/keys/optimumnutrition.public.b64 ({keyfile!r})."
+    )

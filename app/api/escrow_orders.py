@@ -64,7 +64,7 @@ def require_internal_token(x_internal_token: str | None = Header(None)) -> None:
 
 
 # Demo store id mirrors the seller-dashboard convention. In real onboarding,
-# we'd resolve the store by `bpp_id` (e.g. bpp.antarestar.local → Store row).
+# we'd resolve the store by `bpp_id` (e.g. antarestar.jaringan-dagang.id → Store row).
 DEMO_STORE_ID = uuid.UUID("00000000-0000-0000-0000-000000000001")
 
 

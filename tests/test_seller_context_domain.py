@@ -31,7 +31,7 @@ SAFIYA = "safiyafood.jaringan-dagang.id"
 class TestStatusPushContext:
     def test_safiya_on_status_carries_ondc_ret11(self):
         ctx = _ctx(
-            bap_id="beli-aman.bap.metatech.id",
+            bap_id="beli-aman.bap.jaringan-dagang.id",
             bap_uri="http://bap",
             bpp_id="bpp.jaringan-dagang.local",
             bpp_uri="http://bpp",
@@ -65,12 +65,12 @@ class TestStatusPushContext:
 class TestCatalogPushContext:
     def test_safiya_on_search_carries_ondc_ret11(self):
         ctx = _build_context(
-            "beli-aman.bap.metatech.id",
+            "beli-aman.bap.jaringan-dagang.id",
             "http://bap",
             store_subscriber_id=SAFIYA,
         )
         assert ctx["domain"] == "ONDC:RET11"
 
     def test_multi_or_unknown_store_uses_retail_default(self):
-        ctx = _build_context("beli-aman.bap.metatech.id", "http://bap")
+        ctx = _build_context("beli-aman.bap.jaringan-dagang.id", "http://bap")
         assert ctx["domain"] == "ONDC:RET"

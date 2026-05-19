@@ -58,7 +58,7 @@ def _sku():
 _CTX = {
     "action": "select",
     "transaction_id": "t1",
-    "bap_id": "beli-aman.bap.metatech.id",
+    "bap_id": "beli-aman.bap.jaringan-dagang.id",
 }
 
 
