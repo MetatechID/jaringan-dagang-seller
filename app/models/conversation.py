@@ -425,6 +425,32 @@ Index(
 )
 
 
+# Bridge-poll-friendly composite index (Task C4).
+#
+# The bridge's hot loop is::
+#
+#     SELECT id, conversation_id, content
+#     FROM messages
+#     WHERE sender = 'agent' AND delivery = 'pending'
+#     ORDER BY created_at
+#     FOR UPDATE SKIP LOCKED
+#     LIMIT N;
+#
+# ``ix_messages_delivery`` alone covers a single-column scan, but the bridge
+# filters on TWO enums and orders by created_at. A composite (sender,
+# delivery, created_at) index lets Postgres serve the predicate AND the
+# ORDER BY from one btree, which matters once any non-pending agent
+# messages accumulate. ``ix_messages_delivery`` stays in place so other
+# delivery-state filters (e.g. CRM-side "show failed" panes later) keep a
+# cheap index.
+Index(
+    "ix_messages_sender_delivery_created_at",
+    Message.sender,
+    Message.delivery,
+    Message.created_at,
+)
+
+
 # ---------------------------------------------------------------------------
 # Label — a tag agents can apply to conversations (e.g. "refund", "VIP").
 # ---------------------------------------------------------------------------

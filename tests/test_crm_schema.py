@@ -440,6 +440,111 @@ def test_message_unique_partial_index_on_conversation_external_id():
     )
 
 
+def test_message_pending_delivery_composite_index_exists():
+    """C4 composite index for the bridge's pending-delivery polling loop.
+
+    The bridge runs::
+
+        SELECT ... FROM messages
+        WHERE sender = 'agent' AND delivery = 'pending'
+        ORDER BY created_at
+        FOR UPDATE SKIP LOCKED
+        LIMIT N;
+
+    The single-column ``ix_messages_delivery`` (C1) covers a one-value
+    predicate, but as ``delivery='sent'`` rows accumulate the bridge's
+    two-enum-predicate-plus-ORDER-BY benefits from a composite
+    ``(sender, delivery, created_at)`` btree — Postgres can serve both
+    the WHERE and the ORDER BY from one index without a sort step.
+
+    Lives at the bottom of ``app/models/conversation.py``; the operator
+    script ``scripts/add-crm-pending-message-index.py`` materialises it
+    on already-existing tables.
+    """
+    from app.models import Message
+
+    matches = [
+        ix
+        for ix in Message.__table__.indexes
+        if not ix.unique
+        # Order matters: sender first, delivery second, created_at third.
+        # We assert exactly that, not just the column set.
+        and [c.name for c in ix.columns]
+        == ["sender", "delivery", "created_at"]
+    ]
+    assert len(matches) == 1, (
+        "expected exactly one non-unique composite index on "
+        "Message(sender, delivery, created_at) for the bridge poll loop; got "
+        f"{[(ix.name, [c.name for c in ix.columns]) for ix in Message.__table__.indexes]}"
+    )
+    assert matches[0].name == "ix_messages_sender_delivery_created_at", (
+        "the C4 composite index must be named "
+        "ix_messages_sender_delivery_created_at so the operator script "
+        "scripts/add-crm-pending-message-index.py CREATE INDEX matches"
+    )
+
+
+def test_add_crm_pending_message_index_script_exists_and_imports():
+    """The operator script for the C4 composite index must exist and be
+    importable (it's invoked by hand on Neon before the bridge goes live).
+    """
+    import importlib.util
+    import sys
+    from pathlib import Path
+
+    p = (
+        Path(__file__).resolve().parent.parent
+        / "scripts"
+        / "add-crm-pending-message-index.py"
+    )
+    assert p.exists(), f"missing operator script {p}"
+
+    spec = importlib.util.spec_from_file_location(
+        "add_crm_pending_message_index", p
+    )
+    assert spec and spec.loader
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules["add_crm_pending_message_index"] = mod
+    spec.loader.exec_module(mod)
+    assert hasattr(mod, "print_dry_run_sql")
+    assert hasattr(mod, "main")
+
+
+def test_add_crm_pending_message_index_dry_run_emits_create_index():
+    """Dry-run must emit a ``CREATE INDEX IF NOT EXISTS`` for the C4
+    composite index, with the right column order. We assert against the
+    text so a future rename in the model can't drift the script silently.
+    """
+    import importlib.util
+    import io
+    import sys
+    from contextlib import redirect_stdout
+    from pathlib import Path
+
+    p = (
+        Path(__file__).resolve().parent.parent
+        / "scripts"
+        / "add-crm-pending-message-index.py"
+    )
+    spec = importlib.util.spec_from_file_location(
+        "add_crm_pending_message_index", p
+    )
+    assert spec and spec.loader
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules["add_crm_pending_message_index"] = mod
+    spec.loader.exec_module(mod)
+
+    buf = io.StringIO()
+    with redirect_stdout(buf):
+        mod.print_dry_run_sql()
+    out = buf.getvalue()
+    assert "CREATE INDEX IF NOT EXISTS" in out
+    assert "ix_messages_sender_delivery_created_at" in out
+    assert "messages" in out
+    # Column order pinned.
+    assert "(sender, delivery, created_at)" in out
+
+
 # ---------------------------------------------------------------------------
 # Label and conversation_labels join.
 # ---------------------------------------------------------------------------

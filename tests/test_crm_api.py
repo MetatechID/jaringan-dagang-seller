@@ -1106,3 +1106,187 @@ def test_handoff_atomicity_real_postgres(monkeypatch):
             await engine.dispose()
 
     asyncio.run(_run())
+
+
+# ---------------------------------------------------------------------------
+# C4 — agent-delivery-queue pollability (the contract piece B4 relies on).
+# ---------------------------------------------------------------------------
+
+
+def test_agent_message_appears_in_pending_delivery_queue(monkeypatch):
+    """C4 — an agent message lands as a pollable row in the delivery queue.
+
+    The bridge (B4) polls the messages table with::
+
+        SELECT id, conversation_id, content
+        FROM messages
+        WHERE sender = 'agent' AND delivery = 'pending'
+        ORDER BY created_at
+        FOR UPDATE SKIP LOCKED
+        LIMIT N;
+
+    C2's headline test (``test_handoff_atomicity_real_postgres``) proves
+    the *write* atomicity. This test specifically pins the *read* shape:
+    after the CRM POSTs an agent message, the row IS what the bridge's
+    polling query sees — same ``sender``, same ``delivery``, same content.
+
+    Why a separate test (instead of leaning on the C2 PG test)
+    -----------------------------------------------------------
+    The C2 test asserts ``sender == AGENT`` via a row-select, not via the
+    bridge's exact predicate (`WHERE sender='agent' AND delivery='pending'`).
+    This test runs the bridge's actual query so a future regression that
+    breaks the wire-level enum representation (e.g. storing 'AGENT' instead
+    of 'agent' due to ``values_callable`` being dropped from the SAEnum)
+    would fail HERE in the bridge's read path — not just in unrelated
+    serializer tests.
+
+    Skipped when ``CRM_TEST_PG_DSN`` is unset (matches the gating model
+    of the rest of this file and ``tests/test_crm_schema.py``).
+    """
+    dsn = os.environ.get("CRM_TEST_PG_DSN")
+    if not dsn:
+        pytest.skip(
+            "CRM_TEST_PG_DSN not set; pending-delivery queue pollability "
+            "is Postgres-only (the bridge runs against live Postgres). "
+            "Set CRM_TEST_PG_DSN=postgresql+asyncpg://… to exercise."
+        )
+
+    import asyncio
+
+    from sqlalchemy import text
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+    from app.api.conversations import (
+        MessageContent,
+        PostMessageBody,
+        post_agent_message,
+    )
+    from app.models import (
+        Base,
+        Channel,
+        Contact,
+        Conversation,
+        ConversationState,
+        Inbox,
+        Store,
+        User,
+    )
+
+    async def _run():
+        engine = create_async_engine(dsn)
+        Session = async_sessionmaker(engine, expire_on_commit=False)
+
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
+
+        try:
+            # Seed: store, inbox, contact, bot_active conv, agent user.
+            async with Session() as s:
+                store = Store(
+                    subscriber_id=f"crm-c4-queue-{uuid.uuid4()}.local",
+                    subscriber_url="http://localhost",
+                    name="Test Store",
+                )
+                s.add(store)
+                await s.flush()
+
+                inbox = Inbox(
+                    store_id=store.id, name="web", channel=Channel.WEBSITE
+                )
+                contact = Contact(store_id=store.id, external_id="ext-queue")
+                user = User(
+                    email=f"agent-c4-{uuid.uuid4()}@example.com",
+                    is_super_admin=True,
+                )
+                s.add_all([inbox, contact, user])
+                await s.flush()
+
+                conv = Conversation(
+                    store_id=store.id,
+                    inbox_id=inbox.id,
+                    contact_id=contact.id,
+                    channel=Channel.WEBSITE,
+                    state=ConversationState.BOT_ACTIVE,
+                    external_id="conv-queue",
+                )
+                s.add(conv)
+                await s.commit()
+                conv_id = conv.id
+                user_id = user.id
+                store_id = store.id
+
+            # Drive the route: agent posts a message → row should be
+            # immediately pollable.
+            async with Session() as s:
+                from sqlalchemy import select
+
+                user_row = (
+                    await s.execute(select(User).where(User.id == user_id))
+                ).scalar_one()
+                body = PostMessageBody(
+                    content=MessageContent(text="queued for bridge")
+                )
+                await post_agent_message(conv_id, body, user_row, s)
+                await s.commit()
+
+            # Now play the bridge's exact poll query. We DON'T use
+            # FOR UPDATE SKIP LOCKED here because we're outside the bridge's
+            # transaction model and asserting visibility, not concurrent
+            # locking semantics. The PREDICATE is the contract-critical bit.
+            async with Session() as s:
+                rows = (
+                    await s.execute(
+                        text(
+                            "SELECT id, conversation_id, sender::text AS sender, "
+                            "delivery::text AS delivery, store_id, content "
+                            "FROM messages "
+                            "WHERE sender = 'agent' AND delivery = 'pending' "
+                            "AND conversation_id = :cid "
+                            "ORDER BY created_at"
+                        ),
+                        {"cid": conv_id},
+                    )
+                ).mappings().all()
+
+            assert len(rows) == 1, (
+                f"expected exactly one pending agent message visible to "
+                f"the bridge's poll query; got {len(rows)} row(s)"
+            )
+            row = rows[0]
+            assert row["sender"] == "agent", (
+                "bridge poll predicate filters on lowercase enum VALUE; "
+                f"got sender={row['sender']!r} — if this is 'AGENT' the "
+                "SAEnum's values_callable has regressed (C1 contract: "
+                "the enum is stored as the lowercase string the bridge "
+                "queries by)"
+            )
+            assert row["delivery"] == "pending"
+            assert row["store_id"] == store_id, (
+                "denormalized store_id must match the conversation's; the "
+                "bridge can filter by store_id without a join (C1 invariant)"
+            )
+            assert row["content"]["text"] == "queued for bridge"
+
+            # Sanity: the conversation is now human_handoff (atomic flip),
+            # so the bridge MUST NOT reply on this thread.
+            from sqlalchemy import select
+
+            async with Session() as s:
+                conv_after = (
+                    await s.execute(
+                        select(Conversation).where(Conversation.id == conv_id)
+                    )
+                ).scalar_one()
+                assert conv_after.state == ConversationState.HUMAN_HANDOFF, (
+                    "C2 atomicity contract: the agent's POST flips state "
+                    "AND inserts the message in one transaction; if state "
+                    "is anything other than human_handoff here, the "
+                    "transaction-boundary contract has regressed"
+                )
+
+        finally:
+            async with engine.begin() as conn:
+                await conn.run_sync(Base.metadata.drop_all)
+            await engine.dispose()
+
+    asyncio.run(_run())
