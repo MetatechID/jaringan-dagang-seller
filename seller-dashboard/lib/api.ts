@@ -178,7 +178,9 @@ export interface OrderFulfillment {
 
 export type EscrowStatus = "none" | "held" | "released" | "refunded";
 
-export const BELI_AMAN_BAP_ID = "bap.beli-aman.local";
+// Canonical Beckn subscriber_id for the Beli Aman BAP (Task A3 — network
+// identity is *.jaringan-dagang.id regardless of DNS host).
+export const BELI_AMAN_BAP_ID = "beli-aman.bap.jaringan-dagang.id";
 
 export function isBeliAman(o: Pick<Order, "bap_id">): boolean {
   return o.bap_id === BELI_AMAN_BAP_ID;

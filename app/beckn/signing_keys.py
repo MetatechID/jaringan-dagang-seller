@@ -38,16 +38,25 @@ logger = logging.getLogger(__name__)
 # Map from store name (case-insensitive contains match) to canonical BPP subscriber_id.
 # Used as the fallback when Store.subscriber_id isn't yet populated with the
 # fully-qualified network id.
+#
+# Canonical subscriber_id scheme (Task A3): ``<slug>.jaringan-dagang.id``.
+# The 6 entries below cover every store that exists in the live seller DB
+# (verified via GET /api/stores). After the live DB is migrated to canonical
+# via ``scripts/migrate-subscriber-ids.py``, every Store row will carry its
+# canonical subscriber_id directly and this map will become a pure
+# defensive fallback for name-only lookups.
 _NAME_TO_BPP_ID: dict[str, str] = {
-    "safiya": "safiyafood.bpp.metatech.id",
-    "antarestar": "antarestar.bpp.metatech.id",
-    "gendes": "gendes.bpp.metatech.id",
-    "yourbrand": "yourbrand.bpp.metatech.id",
+    "safiya": "safiyafood.jaringan-dagang.id",
+    "antarestar": "antarestar.jaringan-dagang.id",
+    "gendes": "gendes.jaringan-dagang.id",
+    "yourbrand": "yourbrand.jaringan-dagang.id",
+    "matchamu": "matchamu.jaringan-dagang.id",
+    "optimumnutrition": "optimumnutrition.jaringan-dagang.id",
 }
 
 
 def _slug_from_bpp_id(bpp_id: str) -> str:
-    # safiyafood.bpp.metatech.id -> safiyafood
+    # safiyafood.jaringan-dagang.id -> safiyafood
     return bpp_id.split(".", 1)[0]
 
 

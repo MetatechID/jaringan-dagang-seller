@@ -46,17 +46,25 @@ class Settings(BaseSettings):
     BELI_AMAN_INTERNAL_TOKEN: str = "dev-seller-bridge-token"
 
     # --- Beckn Network ---
+    # Canonical subscriber_id scheme (Task A3): ``*.jaringan-dagang.id``.
+    # Per-store BPPs identify as ``<slug>.jaringan-dagang.id``
+    # (Store.subscriber_id in the DB is authoritative). The value below is
+    # the single-tenant fallback used when the seller process needs to
+    # identify itself without a per-store signer.
     REGISTRY_URL: Optional[str] = "http://localhost:3030"
     GATEWAY_URL: Optional[str] = "http://localhost:4030"
-    BPP_SUBSCRIBER_ID: str = "bpp.jaringan-dagang.local"
+    BPP_SUBSCRIBER_ID: str = "bpp.jaringan-dagang.id"
     BPP_SUBSCRIBER_URL: str = "http://localhost:8001"
     BPP_UNIQUE_KEY_ID: str = "k1"
     # Path (relative to repo root or absolute) to the BPP's Ed25519 private key
     # (base64 raw seed). Used to sign /on_* callbacks.
     BPP_SIGNING_KEY_PATH: str = "dev/keys/seller.private.b64"
     # Beli Aman BAP default — used if registry lookup fails or before lookup.
+    # Canonical BAP id (Task A3); the deployed BAP runs at
+    # api.beli-aman.metatech.id but its network identity is the canonical
+    # value below.
     BELI_AMAN_BAP_URL: str = "http://localhost:8003/api/v1/beckn"
-    BELI_AMAN_BAP_ID: str = "beli-aman.bap.metatech.id"
+    BELI_AMAN_BAP_ID: str = "beli-aman.bap.jaringan-dagang.id"
     # Beckn transport base for the ONDC:RET (retail) family. The ONDC
     # domain *code* emitted in the context (e.g. ONDC:RET11 for Safiya) is
     # resolved per-store by python.domain_resolver.resolve_ondc_domain;

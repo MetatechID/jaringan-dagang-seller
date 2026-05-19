@@ -88,8 +88,8 @@ class Order(UUIDPrimaryKeyMixin, TimestampMixin, Base):
 
     # --- Beli Aman fields (added 2026-05-09) ---
     # bap_id is the subscriber_id of the BAP that originated this order.
-    # When equal to "bap.beli-aman.local" the dashboard renders the "via Beli Aman"
-    # badge + escrow panel.
+    # When equal to the canonical Beli Aman BAP id ("beli-aman.bap.jaringan-dagang.id",
+    # Task A3) the dashboard renders the "via Beli Aman" badge + escrow panel.
     bap_id: Mapped[str | None] = mapped_column(
         String(255), nullable=True, index=True
     )

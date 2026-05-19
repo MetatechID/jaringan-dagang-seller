@@ -33,30 +33,32 @@ CATALOG_DIR = (
 # Map slug → canonical store metadata. store_id is the seller's local UUID
 # (where known). If a slug's store doesn't exist yet, the script falls back
 # to looking it up by name via the API.
+#
+# Canonical subscriber_id scheme (Task A3): ``<slug>.jaringan-dagang.id``.
 STORES: dict[str, dict] = {
     "safiyafood": {
         "id": "30b8c0a7-2ed1-4f8f-9a0e-5c2f9a4d72ee",
         "name": "Safiya Food",
-        "subscriber_id": "safiyafood.bpp.metatech.id",
+        "subscriber_id": "safiyafood.jaringan-dagang.id",
         "subscriber_url": "http://localhost:8001/beckn",
     },
     "antarestar": {
         "id": "fc987547-c790-4d91-903d-41c53a18bfc6",
         "name": "Antarestar",
-        "subscriber_id": "antarestar.bpp.metatech.id",
+        "subscriber_id": "antarestar.jaringan-dagang.id",
         "subscriber_url": "http://localhost:8001/beckn",
     },
     # gendes + yourbrand may not have UUIDs yet — leave id None to auto-create
     "gendes": {
         "id": None,
         "name": "Gendes",
-        "subscriber_id": "gendes.bpp.metatech.id",
+        "subscriber_id": "gendes.jaringan-dagang.id",
         "subscriber_url": "http://localhost:8001/beckn",
     },
     "yourbrand": {
         "id": None,
         "name": "YourBrand",
-        "subscriber_id": "yourbrand.bpp.metatech.id",
+        "subscriber_id": "yourbrand.jaringan-dagang.id",
         "subscriber_url": "http://localhost:8001/beckn",
     },
 }

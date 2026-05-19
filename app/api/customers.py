@@ -244,7 +244,7 @@ async def get_customer(
                         "total": o_total,
                         "currency": "IDR",
                         "created_at": o_dt.isoformat(),
-                        "bap_id": "bap.beli-aman.local" if c["is_beli_aman_buyer"] else None,
+                        "bap_id": "beli-aman.bap.jaringan-dagang.id" if c["is_beli_aman_buyer"] else None,
                         "escrow_status": "released" if c["is_beli_aman_buyer"] else "none",
                         "items": {"lines": [{"sku": "DEMO-SKU", "name": "Sample item", "qty": 1, "unit_price_idr": o_total, "image": None}]},
                         "shipping_address": {"line1": "Demo address", "kota": "Jakarta", "provinsi": "DKI Jakarta"},

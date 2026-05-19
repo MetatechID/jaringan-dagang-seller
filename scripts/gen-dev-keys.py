@@ -19,11 +19,21 @@ from nacl.signing import SigningKey
 
 def gen(out_dir: Path, name: str) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
+    priv_file = out_dir / f"{name}.private.b64"
+    pub_file = out_dir / f"{name}.public.b64"
+    # Idempotent: skip if both files already exist. Regenerating would
+    # invalidate every signature the existing key has signed; safer to
+    # leave dev keys in place once minted (delete the .b64 files manually
+    # if you really want a fresh keypair).
+    if priv_file.exists() and pub_file.exists():
+        existing_pub = pub_file.read_text().strip()
+        print(f"  SKIP {name}: keys already exist (pub={existing_pub[:20]}...)")
+        return
     sk = SigningKey.generate()
     priv_b64 = base64.b64encode(bytes(sk)).decode()
     pub_b64 = base64.b64encode(bytes(sk.verify_key)).decode()
-    (out_dir / f"{name}.private.b64").write_text(priv_b64 + "\n")
-    (out_dir / f"{name}.public.b64").write_text(pub_b64 + "\n")
+    priv_file.write_text(priv_b64 + "\n")
+    pub_file.write_text(pub_b64 + "\n")
     print(f"  {name}: pub={pub_b64[:20]}...")
 
 

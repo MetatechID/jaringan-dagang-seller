@@ -69,18 +69,55 @@ DEFAULT_ONDC_DOMAIN = OndcDomain(
 )
 
 # ONDC:RET11 — "F&B (Packaged)" / "Makanan & Minuman Kemasan"
-# (retail.yaml sub_domains). Safiya sells packaged food & beverages.
+# (retail.yaml sub_domains). Safiya & Matchamu sell packaged food & beverages.
 _ONDC_RET11_PACKAGED_FNB = OndcDomain(
     domain_code="ONDC:RET11",
     beckn_domain=ONDC_RETAIL_BECKN_BASE,
 )
 
+# ONDC:RET12 — "Fashion" / "Fashion & Pakaian" (retail.yaml sub_domains).
+# Antarestar sells jackets / daypacks.
+_ONDC_RET12_FASHION = OndcDomain(
+    domain_code="ONDC:RET12",
+    beckn_domain=ONDC_RETAIL_BECKN_BASE,
+)
+
+# ONDC:RET15 — "Health & Beauty" / "Kesehatan & Kecantikan" (retail.yaml
+# sub_domains). Gendes sells feminine care; Optimum Nutrition sells
+# supplements (vitamin / suplemen in the retail.yaml examples list).
+_ONDC_RET15_HEALTH_BEAUTY = OndcDomain(
+    domain_code="ONDC:RET15",
+    beckn_domain=ONDC_RETAIL_BECKN_BASE,
+)
+
 # Per-store mapping keyed by normalized store identifier (subscriber_id or
 # slug, lower-cased & trimmed). Multi-tenant: add a row per onboarded store.
+#
+# Canonical subscriber_id scheme: ``<slug>.jaringan-dagang.id`` (Task A3).
+# Legacy ``bpp.*.local`` / ``*.bpp.metatech.id`` identifiers are intentionally
+# NOT in the table — they fall back to the store-level retail default. The
+# live DB is being migrated to canonical via
+# ``jaringan-dagang-seller/scripts/migrate-subscriber-ids.py``.
+#
+# YourBrand is the white-label demo toko (no real catalogue mix); it
+# deliberately stays on the store-level retail default rather than being
+# mapped to a specific sub-domain.
 _STORE_DOMAINS: dict[str, OndcDomain] = {
     # Safiya — live packaged-F&B seller.
     "safiyafood.jaringan-dagang.id": _ONDC_RET11_PACKAGED_FNB,
     "safiyafood": _ONDC_RET11_PACKAGED_FNB,
+    # Matchamu — premium matcha & powder beverages (packaged F&B).
+    "matchamu.jaringan-dagang.id": _ONDC_RET11_PACKAGED_FNB,
+    "matchamu": _ONDC_RET11_PACKAGED_FNB,
+    # Antarestar — outdoor fashion (jackets, daypacks).
+    "antarestar.jaringan-dagang.id": _ONDC_RET12_FASHION,
+    "antarestar": _ONDC_RET12_FASHION,
+    # Gendes — feminine-care wash / spray (health & beauty).
+    "gendes.jaringan-dagang.id": _ONDC_RET15_HEALTH_BEAUTY,
+    "gendes": _ONDC_RET15_HEALTH_BEAUTY,
+    # Optimum Nutrition — sports supplements (whey, BCAA, vitamin).
+    "optimumnutrition.jaringan-dagang.id": _ONDC_RET15_HEALTH_BEAUTY,
+    "optimumnutrition": _ONDC_RET15_HEALTH_BEAUTY,
 }
 
 
