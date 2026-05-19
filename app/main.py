@@ -172,6 +172,11 @@ from app.api.refunds import router as refunds_router  # noqa: E402
 from app.api.admin import router as admin_router  # noqa: E402
 from app.api.imports import router as imports_router  # noqa: E402
 from app.api.me import router as me_router  # noqa: E402
+# Chatwoot-style CRM (Task C2). Mutable resources; NOT in _CACHEABLE_PREFIXES.
+from app.api.conversations import router as conversations_router  # noqa: E402
+from app.api.contacts import router as contacts_router  # noqa: E402
+from app.api.inboxes import router as inboxes_router  # noqa: E402
+from app.api.labels import router as labels_router  # noqa: E402
 
 # Beckn protocol endpoints under /beckn/ (e.g. POST /beckn/search, POST /beckn/confirm)
 app.include_router(beckn_router, prefix="/beckn")
@@ -187,6 +192,12 @@ app.include_router(refunds_router, prefix="/api")
 app.include_router(admin_router, prefix="/api")
 app.include_router(imports_router, prefix="/api")
 app.include_router(me_router, prefix="/api")
+
+# CRM (C2). Path-only routers; /api prefix added here. Not cacheable.
+app.include_router(conversations_router, prefix="/api")
+app.include_router(contacts_router, prefix="/api")
+app.include_router(inboxes_router, prefix="/api")
+app.include_router(labels_router, prefix="/api")
 
 # Beli Aman bridge: BAP POSTs escrow orders to /api/internal/escrow-orders
 app.include_router(escrow_orders_router, prefix="/api")
