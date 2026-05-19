@@ -47,10 +47,21 @@ class Descriptor(BaseModel):
 
 
 class TagValue(BaseModel):
-    """A single key-value tag entry."""
+    """A single key-value tag entry.
+
+    Beckn/ONDC tag lists use the flat ``{code, value}`` shape (e.g. ONDC
+    ``@ondc/org/...`` groups). ``descriptor`` is retained for the older
+    in-repo convention (e.g. variant tags emitted as
+    ``{descriptor:{code},value}``); ``code`` is the canonical ONDC tag
+    list key. Both are optional so existing payloads keep validating.
+    """
 
     model_config = {"populate_by_name": True}
 
+    code: Optional[str] = Field(
+        default=None,
+        description="Machine-readable tag key (ONDC/Beckn tag list code)",
+    )
     descriptor: Optional[Descriptor] = Field(
         default=None,
         description="Descriptor for this tag value",

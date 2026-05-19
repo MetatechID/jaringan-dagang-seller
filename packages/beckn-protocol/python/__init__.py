@@ -85,10 +85,23 @@ from .message import (
     BecknResponse,
 )
 
-# Errors
+# Errors (+ ONDC retail error-code catalogue)
 from .errors import (
+    ONDC_RETAIL_ERROR_CODES,
     BecknError,
     BecknErrorType,
+    OndcErrorClass,
+    OndcErrorCode,
+    ondc_error,
+)
+
+# ONDC @ondc/org tag builders (RET11 search/select/confirm)
+from .ondc_tags import (
+    ONDC_ORG_STATUTORY_PACKAGED_COMMODITIES,
+    ONDC_ORG_STATUTORY_PREPACKAGED_FOOD,
+    build_fulfillment_ondc_tags,
+    build_item_statutory_tags,
+    build_payment_settlement_tags,
 )
 
 # Signing utilities
@@ -171,9 +184,19 @@ __all__ = [
     "AckStatus",
     "BecknRequest",
     "BecknResponse",
-    # Errors
+    # Errors (+ ONDC retail error-code catalogue)
     "BecknError",
     "BecknErrorType",
+    "ONDC_RETAIL_ERROR_CODES",
+    "OndcErrorClass",
+    "OndcErrorCode",
+    "ondc_error",
+    # ONDC @ondc/org tag builders
+    "ONDC_ORG_STATUTORY_PACKAGED_COMMODITIES",
+    "ONDC_ORG_STATUTORY_PREPACKAGED_FOOD",
+    "build_fulfillment_ondc_tags",
+    "build_item_statutory_tags",
+    "build_payment_settlement_tags",
     # Signing
     "BecknSigner",
     "KeyPair",

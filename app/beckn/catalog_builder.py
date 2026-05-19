@@ -31,6 +31,10 @@ from python import (
     Provider,
     Quantity,
     QuantityDetail,
+    build_fulfillment_ondc_tags,
+    build_item_statutory_tags,
+    build_payment_settlement_tags,
+    resolve_ondc_domain,
 )
 
 from app.models.product import Product
@@ -58,6 +62,26 @@ class BecknCatalogBuilder:
         """Convert SKUImage rows (per-variant gallery) to Beckn Image objects."""
         sku_images = getattr(sku, "images", None) or []
         return [Image(url=img.url) for img in sorted(sku_images, key=lambda i: i.position)]
+
+    @staticmethod
+    def _ondc_item_statutory_tags(product: Product) -> list:
+        """Build ONDC item statutory tag groups from product.attributes.
+
+        Packaged-F&B (ONDC:RET11) items carry statutory / packaged-commodity
+        data under ``product.attributes["ondc"]`` with the two ONDC groups
+        ``statutory_reqs_packaged_commodities`` /
+        ``statutory_reqs_prepackaged_food`` (sub-key -> value maps). Absent
+        or empty -> no tags (a store that hasn't filled statutory data
+        simply emits none; we never fabricate values).
+        """
+        attrs = getattr(product, "attributes", None) or {}
+        ondc = attrs.get("ondc") if isinstance(attrs, dict) else None
+        if not isinstance(ondc, dict):
+            return []
+        return build_item_statutory_tags(
+            packaged_commodities=ondc.get("statutory_reqs_packaged_commodities"),
+            prepackaged_food=ondc.get("statutory_reqs_prepackaged_food"),
+        )
 
     @staticmethod
     def _sku_to_item(sku: SKU, product: Product) -> Item:
@@ -96,18 +120,19 @@ class BecknCatalogBuilder:
         if product.category and product.category.beckn_category_id:
             category_ids = [product.category.beckn_category_id]
 
-        # Variant info as Beckn tags so the BAP can re-group + render variant pickers.
-        # Each TagValue has {descriptor.code, value} since plain `code` isn't part of
-        # the TagValue schema (it's on Tag, the group level).
-        variant_tags = None
+        # Variant info as Beckn tags so the BAP can re-group + render variant
+        # pickers, using the canonical flat {code,value} tag-list shape.
+        item_tags: list = []
         if sku.variant_name or sku.variant_value:
-            variant_tags = [{
+            item_tags.append({
                 "code": "variant",
                 "list": [
-                    {"descriptor": {"code": "name"}, "value": sku.variant_name or ""},
-                    {"descriptor": {"code": "value"}, "value": sku.variant_value or ""},
+                    {"code": "name", "value": sku.variant_name or ""},
+                    {"code": "value", "value": sku.variant_value or ""},
                 ],
-            }]
+            })
+        # ONDC:RET11 item statutory / packaged-commodity tags (Task A2).
+        item_tags.extend(BecknCatalogBuilder._ondc_item_statutory_tags(product))
         return Item(
             id=str(sku.id),
             parent_item_id=str(product.id),  # groups all SKUs of one product
@@ -119,7 +144,7 @@ class BecknCatalogBuilder:
             payment_ids=["payment-prepaid"],
             matched=True,
             rateable=True,
-            tags=variant_tags,
+            tags=item_tags or None,
         )
 
     # ------------------------------------------------------------------
@@ -168,20 +193,59 @@ class BecknCatalogBuilder:
             images=[Image(url=store.logo_url)] if store.logo_url else None,
         )
 
+        # Resolve this store's ONDC domain (per-store; not hardcoded) so
+        # downstream consumers know which ONDC sub-domain these tags are
+        # scoped to. Safiya -> ONDC:RET11; unknown -> store-level default.
+        ondc_domain = resolve_ondc_domain(store.subscriber_id)
+
+        # ONDC:RET11 fulfillment delivery-terms tag (Task A2). DAP =
+        # seller delivers to the buyer's named place, the typical retail
+        # storefront-delivery incoterm.
+        fulfillment_ondc_tags = [
+            t.model_dump(exclude_none=True)
+            for t in build_fulfillment_ondc_tags(incoterms="DAP")
+        ]
         fulfillments: list[dict[str, Any]] = [
             BecknFulfillment(
                 id="fulfillment-delivery",
                 type="Delivery",
                 tracking=True,
+                tags=fulfillment_ondc_tags or None,
             ).model_dump(exclude_none=True),
         ]
 
+        # ONDC:RET11 payment settlement-terms tag (Task A2): settle on
+        # delivery, 1-day window, BAP finder fee — the ONDC RET defaults.
+        payment_ondc_tags = [
+            t.model_dump(exclude_none=True)
+            for t in build_payment_settlement_tags(
+                settlement_basis="delivery",
+                settlement_window="P1D",
+                buyer_app_finder_fee_type="percent",
+                buyer_app_finder_fee_amount="3",
+            )
+        ]
         payments: list[dict[str, Any]] = [
             BecknPayment(
                 id="payment-prepaid",
                 type=PaymentType.PRE_FULFILLMENT,
                 collected_by=PaymentCollectedBy.BPP,
+                tags=payment_ondc_tags or None,
             ).model_dump(exclude_none=True),
+        ]
+
+        # Provider-level ONDC domain tag: carries the per-store resolved
+        # ONDC sub-domain code (e.g. ONDC:RET11 for Safiya) alongside its
+        # Beckn transport base, so the BAP can scope catalogue handling
+        # without re-deriving it. Resolved, never hardcoded.
+        provider_tags = [
+            {
+                "code": "@ondc/org/domain",
+                "list": [
+                    {"code": "domain_code", "value": ondc_domain.domain_code},
+                    {"code": "beckn_domain", "value": ondc_domain.beckn_domain},
+                ],
+            }
         ]
 
         return Provider(
@@ -195,6 +259,7 @@ class BecknCatalogBuilder:
             fulfillments=fulfillments or None,
             payments=payments or None,
             rateable=True,
+            tags=provider_tags,
         )
 
     # ------------------------------------------------------------------

@@ -34,9 +34,41 @@ _proto_path = os.path.abspath(
 if _proto_path not in sys.path:
     sys.path.insert(0, _proto_path)
 
-from python import BecknAction, BecknContext, OrderState
+from python import (
+    BecknAction,
+    BecknContext,
+    OrderState,
+    build_fulfillment_ondc_tags,
+    build_payment_settlement_tags,
+)
 
 logger = logging.getLogger(__name__)
+
+
+def _ondc_fulfillment_tags() -> list[dict[str, Any]]:
+    """Canonical ONDC:RET11 fulfillment delivery-terms tags (Task A2).
+
+    DAP = seller delivers to the buyer's named place (typical retail
+    storefront delivery). Emitted on on_select / on_confirm fulfillments
+    so they carry the same ONDC tags as on_search (catalog_builder).
+    """
+    return [
+        t.model_dump(exclude_none=True)
+        for t in build_fulfillment_ondc_tags(incoterms="DAP")
+    ]
+
+
+def _ondc_payment_tags() -> list[dict[str, Any]]:
+    """Canonical ONDC:RET11 payment settlement-terms tags (Task A2)."""
+    return [
+        t.model_dump(exclude_none=True)
+        for t in build_payment_settlement_tags(
+            settlement_basis="delivery",
+            settlement_window="P1D",
+            buyer_app_finder_fee_type="percent",
+            buyer_app_finder_fee_amount="3",
+        )
+    ]
 
 
 def _callback_context(ctx: dict[str, Any], callback_action: str) -> dict[str, Any]:
@@ -182,6 +214,7 @@ async def handle_select(
                         "id": "fulfillment-delivery",
                         "type": "Delivery",
                         "tracking": True,
+                        "tags": _ondc_fulfillment_tags() or None,
                     }
                 ],
                 "payments": [
@@ -190,6 +223,7 @@ async def handle_select(
                         "type": "PRE-FULFILLMENT",
                         "collected_by": "BPP",
                         "status": "NOT-PAID",
+                        "tags": _ondc_payment_tags() or None,
                     }
                 ],
             }
@@ -449,6 +483,7 @@ async def handle_confirm(
                         "type": "Delivery",
                         "state": {"descriptor": {"code": "Pending"}},
                         "tracking": True,
+                        "tags": _ondc_fulfillment_tags() or None,
                     }
                 ],
                 "payments": [
@@ -462,6 +497,7 @@ async def handle_confirm(
                             "amount": str(payment_record.amount),
                             "currency": "IDR",
                         },
+                        "tags": _ondc_payment_tags() or None,
                     }
                 ],
                 "created_at": _created_at.isoformat() if _created_at else None,
