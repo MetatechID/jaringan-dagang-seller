@@ -8,6 +8,7 @@ const PAGE_TITLES: Record<string, string> = {
   "/": "Dashboard",
   "/products": "Products",
   "/orders": "Orders",
+  "/conversations": "Conversations",
   "/settings": "Store Settings",
   "/settings/team": "Team",
   "/refunds": "Refunds",
@@ -16,6 +17,7 @@ const PAGE_TITLES: Record<string, string> = {
 function getTitle(pathname: string): string {
   if (pathname.startsWith("/products/")) return "Edit Product";
   if (pathname.startsWith("/orders/")) return "Order Detail";
+  if (pathname.startsWith("/conversations/")) return "Conversations";
   return PAGE_TITLES[pathname] || "Dashboard";
 }
 
