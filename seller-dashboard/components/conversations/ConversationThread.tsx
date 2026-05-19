@@ -53,10 +53,30 @@ export default function ConversationThread({ conversationId }: ConversationThrea
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const lastIdRef = useRef<string | null>(null);
+  // C3 review fix — Polling race on conversation switch.
+  //
+  // A single AbortController is scoped to "this conversation view" (i.e. one
+  // (conversationId) cycle). It is created by the initial-load effect below
+  // and reused by `pollTick` for every in-flight fetch. On cleanup (conv id
+  // change or unmount) the controller is aborted, which cancels any
+  // outstanding initial-load AND polling fetches. This closes the race where
+  // the user switched from conv A to conv B while an A-pollTick was in
+  // flight: previously the A-fetch would resolve after B's load applied its
+  // state, calling `setMessages((prev) => [...prev, ...A_fresh])` against
+  // B's `prev`, polluting the thread and corrupting `lastIdRef`. Now the
+  // A-fetch rejects with AbortError before any setState runs.
+  //
+  // Visibility-pause semantics still hold: the polling interval is paused by
+  // `useVisiblePolling` while the tab is hidden, but the controller itself
+  // is NOT aborted on hide — so when the tab returns to visible, the next
+  // tick uses the same live controller (no first-tick no-op, no zombie
+  // controller leak).
+  const abortRef = useRef<AbortController | null>(null);
 
   // Load conversation + contact + initial messages whenever the id changes.
   useEffect(() => {
     const ac = new AbortController();
+    abortRef.current = ac;
     setLoading(true);
     setMessages([]);
     setConv(null);
@@ -88,18 +108,33 @@ export default function ConversationThread({ conversationId }: ConversationThrea
       }
     })();
 
-    return () => ac.abort();
+    return () => {
+      ac.abort();
+      if (abortRef.current === ac) abortRef.current = null;
+    };
   }, [conversationId]);
 
   // Poll for new messages on a short interval; pause when tab hidden. The
   // `after_id` cursor + append keeps payloads tiny and avoids flicker.
+  //
+  // Every fetch here is gated by `abortRef.current.signal` — the SAME
+  // controller used by the initial-load effect — so a conv id change (or
+  // unmount) cancels any in-flight polling fetch before its setState runs.
+  // See the comment on `abortRef` above for the full rationale.
   const pollTick = useCallback(async () => {
     if (!conv) return;
+    const ac = abortRef.current;
+    // No controller means the owning effect has torn down (mid-switch);
+    // skip this tick — the new effect will install a fresh controller.
+    if (!ac) return;
+    const signal = ac.signal;
     try {
       const fresh = await fetchMessages(conversationId, {
         after_id: lastIdRef.current ?? undefined,
         limit: 100,
+        signal,
       });
+      if (signal.aborted) return;
       if (fresh.length > 0) {
         setMessages((prev) => {
           const seen = new Set(prev.map((m) => m.id));
@@ -113,10 +148,14 @@ export default function ConversationThread({ conversationId }: ConversationThrea
         if (isNearBottom()) scrollToBottom(false);
       }
       // Also refresh conversation state in case server-side handoff happened.
-      const refreshed = await fetchConversation(conversationId);
+      const refreshed = await fetchConversation(conversationId, { signal });
+      if (signal.aborted) return;
       setConv(refreshed);
-    } catch {
-      /* swallow polling errors */
+    } catch (e) {
+      // AbortError is the user-initiated cancel (conv switch / unmount) —
+      // silently skip; do not surface as a polling error.
+      if ((e as DOMException)?.name === "AbortError") return;
+      /* swallow other polling errors */
     }
   }, [conv, conversationId]);
 

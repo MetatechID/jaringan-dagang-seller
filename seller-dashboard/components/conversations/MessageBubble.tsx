@@ -11,6 +11,24 @@ import type {
 import { formatIDR, formatDate, formatRelative } from "@/lib/format";
 
 /**
+ * Return `value` only when it parses as a URL whose protocol is http(s).
+ * Used to gate `<img src>` and `<a href>` on bot-supplied block payloads so
+ * that `javascript:`, `data:`, `file:`, etc. cannot reach the DOM. (Markdown
+ * link parsing already restricts to `https?://` via regex; this helper closes
+ * the same hole on block-renderer call sites — see C3 review fix.)
+ */
+function safeHttpUrl(value: string | undefined): string | undefined {
+  if (!value) return undefined;
+  try {
+    const u = new URL(value);
+    if (u.protocol === "http:" || u.protocol === "https:") return value;
+    return undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * Minimal-and-safe inline Markdown renderer.
  *
  * Supports paragraphs (blank-line separated), single-line breaks, bold (`**`),
@@ -142,41 +160,52 @@ function renderLineBreaks(s: string, keyBase: number): React.ReactNode {
 // ---------- Block renderers ----------
 
 function ProductCard({ block }: { block: MessageBlockProductCard }) {
+  const safeImage = safeHttpUrl(block.image_url);
+  const safeLink = safeHttpUrl(block.url);
   return (
     <div className="mt-2 flex items-stretch gap-3 rounded-lg border border-black/10 bg-white p-2 text-gray-900 max-w-xs">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={block.image_url}
-        alt={block.title}
-        width={64}
-        height={64}
-        className="h-16 w-16 rounded-md object-cover bg-gray-100"
-        loading="lazy"
-      />
+      {safeImage ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={safeImage}
+          alt={block.title}
+          width={64}
+          height={64}
+          className="h-16 w-16 rounded-md object-cover bg-gray-100"
+          loading="lazy"
+        />
+      ) : (
+        <div
+          aria-hidden="true"
+          className="h-16 w-16 rounded-md bg-gray-100"
+        />
+      )}
       <div className="min-w-0 flex-1">
         <p className="text-xs font-mono text-gray-400">{block.sku}</p>
         <p className="truncate text-sm font-semibold">{block.title}</p>
         <p className="text-sm font-bold text-brand-700">{formatIDR(block.price_idr)}</p>
-        {block.url && (
+        {safeLink ? (
           <a
-            href={block.url}
+            href={safeLink}
             target="_blank"
             rel="noopener noreferrer"
             className="text-xs text-brand-600 hover:underline"
           >
             View product →
           </a>
-        )}
+        ) : null}
       </div>
     </div>
   );
 }
 
 function ImageBlock({ block }: { block: MessageBlockImage }) {
+  const safe = safeHttpUrl(block.url);
+  if (!safe) return null;
   return (
     /* eslint-disable-next-line @next/next/no-img-element */
     <img
-      src={block.url}
+      src={safe}
       alt={block.alt || ""}
       width={256}
       height={192}
@@ -187,17 +216,25 @@ function ImageBlock({ block }: { block: MessageBlockImage }) {
 }
 
 function QRBlock({ block }: { block: MessageBlockQR }) {
+  const safe = safeHttpUrl(block.url);
   return (
     <div className="mt-2 inline-flex flex-col items-center rounded-lg border border-black/10 bg-white p-2 text-gray-900">
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={block.url}
-        alt={block.caption || "QR code"}
-        width={160}
-        height={160}
-        className="h-40 w-40 object-contain"
-        loading="lazy"
-      />
+      {safe ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={safe}
+          alt={block.caption || "QR code"}
+          width={160}
+          height={160}
+          className="h-40 w-40 object-contain"
+          loading="lazy"
+        />
+      ) : (
+        <div
+          aria-hidden="true"
+          className="h-40 w-40 bg-gray-100"
+        />
+      )}
       <p className="mt-1.5 text-center text-xs text-gray-600">
         {block.caption || "Scan to pay"}
       </p>
