@@ -17,6 +17,18 @@ from app.models.marketplace_map import MarketplaceProductMap
 from app.models.import_job import ImportJob, ImportJobStatus, ImportSource
 from app.models.user import User
 from app.models.store_membership import StoreMembership, StoreRole
+from app.models.conversation import (
+    Channel,
+    Contact,
+    Conversation,
+    ConversationState,
+    Inbox,
+    Label,
+    Message,
+    MessageDelivery,
+    MessageSender,
+    conversation_labels,
+)
 
 __all__ = [
     "Base",
@@ -46,4 +58,15 @@ __all__ = [
     "User",
     "StoreMembership",
     "StoreRole",
+    # Chatwoot-style CRM (Task C1)
+    "Channel",
+    "ConversationState",
+    "MessageSender",
+    "MessageDelivery",
+    "Contact",
+    "Inbox",
+    "Conversation",
+    "Message",
+    "Label",
+    "conversation_labels",
 ]
