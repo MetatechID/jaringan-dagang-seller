@@ -1,0 +1,16 @@
+# jd-sell-mcp — runtime + test deps
+#
+# Deliberately minimal. No "mcp" SDK: the JSON-RPC 2.0 surface is hand-rolled
+# (~80 LOC) — keeps the audit surface small and avoids pulling in a stack
+# whose versioning churn is faster than this server's own.
+
+fastapi>=0.110.0
+uvicorn[standard]>=0.27.0
+httpx>=0.26.0
+pydantic>=2.5.0
+
+# Test-only — kept in the same file because there's no separate "dev" extra
+# on this micro-service. The deploy image installs from this file as-is;
+# pytest + pytest-asyncio together add ~3MB and have no transitive risk.
+pytest>=8.0.0
+pytest-asyncio>=0.23.0
