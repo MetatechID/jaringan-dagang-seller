@@ -128,6 +128,21 @@ from .domain_resolver import (
     resolve_ondc_domain,
 )
 
+# ONDC IGM (Issue & Grievance Management) v1 — refund-request scope
+from .igm import (
+    COMPLAINANT_ACTIONS,
+    ISSUE_CATEGORIES,
+    ISSUE_SUB_CATEGORIES_ITEM,
+    Issue,
+    IssueActor,
+    IssueDescription,
+    IssueLevel,
+    IssueResolutionAction,
+    RESPONDENT_ACTIONS,
+    build_issue_envelope,
+    build_on_issue_envelope,
+)
+
 __all__ = [
     # Context
     "BecknAction",
@@ -212,4 +227,16 @@ __all__ = [
     "ONDC_RETAIL_BECKN_BASE",
     "OndcDomain",
     "resolve_ondc_domain",
+    # ONDC IGM (Issue & Grievance Management) v1
+    "COMPLAINANT_ACTIONS",
+    "ISSUE_CATEGORIES",
+    "ISSUE_SUB_CATEGORIES_ITEM",
+    "Issue",
+    "IssueActor",
+    "IssueDescription",
+    "IssueLevel",
+    "IssueResolutionAction",
+    "RESPONDENT_ACTIONS",
+    "build_issue_envelope",
+    "build_on_issue_envelope",
 ]

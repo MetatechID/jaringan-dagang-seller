@@ -223,6 +223,8 @@ _ACTION_HANDLERS = {
     "update": handlers.handle_update,
     "rating": handlers.handle_rating,
     "support": handlers.handle_support,
+    # ONDC IGM (Task A5) — refund-request scope.
+    "issue": handlers.handle_issue,
 }
 
 for _action, _handler in _ACTION_HANDLERS.items():

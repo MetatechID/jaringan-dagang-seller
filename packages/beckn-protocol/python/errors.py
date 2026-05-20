@@ -178,6 +178,17 @@ ONDC_RETAIL_ERROR_CODES: dict[str, OndcErrorCode] = dict(
         _e("50006", OndcErrorClass.SELLER_APP, "Order terminated", "Order terminated as Buyer App did not accept terms proposed by Seller App"),
         _e("50007", OndcErrorClass.SELLER_APP, "Fulfillment not found", "Fulfillment not found"),
         _e("50008", OndcErrorClass.SELLER_APP, "Fulfillment cannot be updated", "Fulfillment has reached terminal state, cannot be updated"),
+        # --- IGM (Issue & Grievance Management) — 90xxx ---
+        # Mirrors ONDC-Official/protocol-network-extension @ release-1.0.0
+        # error_codes/igm/ErrorCodes.yaml. v1 scope is the refund-request
+        # path so we localize the codes the /issue + /on_issue exchanges
+        # can actually emit; broader IGM error space (escalation, ODR) is
+        # deferred with the rest of multi-party IGM.
+        _e("90001", OndcErrorClass.SELLER_APP, "Invalid Issue", "Issue could not be processed - invalid category/sub_category or order reference"),
+        _e("90002", OndcErrorClass.SELLER_APP, "Stale Issue", "Issue raised after the IGM grievance window has expired"),
+        _e("90003", OndcErrorClass.SELLER_APP, "Issue not found", "Referenced issue_id does not exist on the respondent side"),
+        _e("90004", OndcErrorClass.SELLER_APP, "Issue already resolved", "Cannot update or re-open an Issue that is already in a terminal state"),
+        _e("90005", OndcErrorClass.SELLER_APP, "Order not eligible", "Order state does not permit raising an Issue"),
     ]
 )
 

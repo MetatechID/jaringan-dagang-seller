@@ -38,6 +38,8 @@ if _proto_path not in sys.path:
 from python import (
     BecknAction,
     BecknContext,
+    ISSUE_CATEGORIES,
+    ISSUE_SUB_CATEGORIES_ITEM,
     OrderState,
     build_fulfillment_ondc_tags,
     build_payment_settlement_tags,
@@ -850,5 +852,131 @@ async def handle_support(
             "phone": "+62-21-000-0000",
             "email": "support@jaringan-dagang.id",
             "uri": "https://jaringan-dagang.id/support",
+        },
+    }
+
+
+# ======================================================================
+# handle_issue — ONDC IGM /issue (Task A5)
+# ======================================================================
+
+async def handle_issue(
+    context: dict[str, Any],
+    message: dict[str, Any],
+    db: AsyncSession,
+) -> dict[str, Any]:
+    """Accept a buyer-raised ONDC IGM Issue, create a RefundRequest, ACK.
+
+    Task A5 narrow scope: every Issue we accept is treated as a refund
+    request candidate. The seller-side response (PROCESSING / RESOLVED /
+    REJECTED) is emitted later by the seller agent via the new
+    ``POST /api/refunds/{id}/respond`` REST endpoint.
+
+    This handler returns the synchronous /on_issue ACK envelope with
+    ``respondent_action = PROCESSING`` so the BAP immediately knows we've
+    accepted the Issue and assigned it our refund_id.
+    """
+    from app.services import refund_service
+
+    issue = message.get("issue") or {}
+    issue_id = issue.get("id")
+    category = issue.get("category") or ""
+    sub_category = issue.get("sub_category") or ""
+
+    if not issue_id:
+        return {
+            "context": _callback_context(context, "on_issue"),
+            "error": {
+                "type": "DOMAIN-ERROR",
+                "code": "90001",
+                "message": "Issue.id is required",
+            },
+        }
+
+    if category not in ISSUE_CATEGORIES:
+        return {
+            "context": _callback_context(context, "on_issue"),
+            "error": {
+                "type": "DOMAIN-ERROR",
+                "code": "90001",
+                "message": f"unknown IGM category {category!r}",
+            },
+        }
+    if category == "ITEM" and sub_category not in ISSUE_SUB_CATEGORIES_ITEM:
+        return {
+            "context": _callback_context(context, "on_issue"),
+            "error": {
+                "type": "DOMAIN-ERROR",
+                "code": "90001",
+                "message": (
+                    f"unknown IGM sub_category {sub_category!r} for "
+                    f"category=ITEM"
+                ),
+            },
+        }
+
+    order_details = issue.get("order_details") or {}
+    order_beckn_id = order_details.get("id") or ""
+    description = issue.get("description") or {}
+    reason_text = description.get("long_desc") or description.get(
+        "short_desc"
+    ) or ""
+    additional = description.get("additional_desc") or {}
+    refund_block = additional.get("refund") or {}
+    try:
+        refund_amount = int(refund_block.get("amount")) if refund_block.get(
+            "amount"
+        ) else None
+    except (TypeError, ValueError):
+        refund_amount = None
+
+    req = await refund_service.create_from_beckn_issue(
+        db,
+        order_beckn_id=order_beckn_id,
+        sub_category=sub_category,
+        reason_text=reason_text,
+        requested_amount=refund_amount,
+        bap_issue_id=issue_id,
+    )
+    if req is None:
+        return {
+            "context": _callback_context(context, "on_issue"),
+            "error": {
+                "type": "DOMAIN-ERROR",
+                "code": "90005",
+                "message": (
+                    f"Order {order_beckn_id} not found / not eligible "
+                    f"for an IGM Issue"
+                ),
+            },
+        }
+
+    # Synchronous PROCESSING ACK: tell the BAP we accepted the Issue and
+    # are working on it. The terminal RESOLVED/REJECTED ride out later as
+    # a separate /on_issue when the seller agent responds.
+    return {
+        "context": _callback_context(context, "on_issue"),
+        "message": {
+            "issue": {
+                "id": issue_id,
+                "status": "PROCESSING",
+                "issue_type": "ISSUE",
+                "issue_actions": {
+                    "complainant_actions": [],
+                    "respondent_actions": [
+                        {
+                            "respondent_action": "PROCESSING",
+                            "short_desc": "Issue received; investigating.",
+                            "updated_at": datetime.now(
+                                timezone.utc
+                            ).isoformat(),
+                            "updated_by": {
+                                "type": "AGENT",
+                                "id": settings.BPP_SUBSCRIBER_ID,
+                            },
+                        }
+                    ],
+                },
+            }
         },
     }

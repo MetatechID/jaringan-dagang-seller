@@ -3,6 +3,7 @@
 GET  /api/refunds                 — list (filterable by status, order_id)
 POST /api/refunds/{id}/approve    — approve a PENDING request
 POST /api/refunds/{id}/deny       — deny a PENDING request
+POST /api/refunds/{id}/respond    — ONDC IGM response (PROCESSING/RESOLVED/REJECTED, Task A5)
 """
 
 from __future__ import annotations
@@ -10,7 +11,7 @@ from __future__ import annotations
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -102,6 +103,49 @@ async def deny_refund(
             db, refund_id,
             decided_by=body.decided_by or "seller-dashboard",
             note=body.note,
+        )
+    except refund_service.RefundError as e:
+        raise HTTPException(400, str(e))
+    return {"data": _serialize(r)}
+
+
+class IgmRespondBody(BaseModel):
+    """Body for POST /api/refunds/{id}/respond — Task A5.
+
+    ``action`` is the ONDC IGM respondent_action: PROCESSING (ack), RESOLVED
+    (refund issued), or REJECTED (seller declines the refund). The
+    seller dashboard UI for this isn't built yet (C3 scope); this REST
+    endpoint is what the eventual UI will call.
+    """
+
+    action: str = Field(
+        ...,
+        description="One of PROCESSING, RESOLVED, REJECTED.",
+    )
+    note: str = Field(
+        default="",
+        description="Free-text note shown to the buyer on /on_issue.",
+    )
+    decided_by: str = Field(
+        default="seller-dashboard",
+        description="Who took the action (audit trail).",
+    )
+
+
+@router.post("/{refund_id}/respond")
+async def respond_to_refund(
+    refund_id: uuid.UUID,
+    body: IgmRespondBody,
+    db: AsyncSession = Depends(get_db),
+):
+    """ONDC IGM /on_issue from the seller agent (Task A5)."""
+    try:
+        r = await refund_service.respond_to_issue(
+            db,
+            refund_id,
+            action=body.action,
+            note=body.note,
+            decided_by=body.decided_by,
         )
     except refund_service.RefundError as e:
         raise HTTPException(400, str(e))
