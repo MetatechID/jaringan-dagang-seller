@@ -141,6 +141,34 @@ All are idempotent (`IF NOT EXISTS`) and dry-run-by-default. Each requires
      python apps/beli-aman-bap/scripts/add-bot-rest-tables.py --apply
    ```
 
+9. **A5 IGM dispute columns (buyer)** — `Dispute.bpp_issue_id` + `bpp_resolution_note` + `resolved_at`:
+   ```sh
+   cd ~/Code/jaringan-dagang-buyer
+   DATABASE_URL=postgresql+asyncpg://<bap-neon> \
+     python apps/beli-aman-bap/scripts/add-dispute-issue-columns.py --apply
+   ```
+
+10. **A6 RefundRequest.bap_issue_id (seller)** — dedicated column + UPDATE backfill from seller_note stash:
+    ```sh
+    cd ~/Code/jaringan-dagang-seller
+    DATABASE_URL=postgresql+asyncpg://<seller-neon> \
+      python scripts/add-refund-bap-issue-id-column.py --apply
+    ```
+
+11. **A6 RSP + Score tables (seller)** — `settlement_ledger` + `score_snapshots`:
+    ```sh
+    cd ~/Code/jaringan-dagang-seller
+    DATABASE_URL=postgresql+asyncpg://<seller-neon> \
+      python scripts/add-rsp-score-tables.py --apply
+    ```
+
+12. **A6 RSP rating columns (buyer)** — `Order.settlement_status/basis/window/reference`:
+    ```sh
+    cd ~/Code/jaringan-dagang-buyer
+    DATABASE_URL=postgresql+asyncpg://<bap-neon> \
+      python apps/beli-aman-bap/scripts/add-rsp-rating-columns.py --apply
+    ```
+
 After all 8, redeploy each Vercel project so the lifespan reconciliation
 hooks (`stores.image_base_url`, `payments.xendit_invoice_url`) catch the
 column adds idempotently. The defensive lifespan-time `ALTER ... IF NOT
