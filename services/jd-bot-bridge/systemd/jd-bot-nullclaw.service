@@ -1,0 +1,34 @@
+[Unit]
+Description=jd-bot nullclaw daemon (Qwen agent runtime)
+Documentation=https://github.com/nullclaw/nullclaw
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=jd-bot
+Group=jd-bot
+EnvironmentFile=/etc/jd-bot/bridge.env
+# The config template ships in this repo at
+# services/jd-bot-bridge/nullclaw-config.json. Operator copies it into
+# /home/jd-bot/.nullclaw/config.json and substitutes ${QWEN_BASE_URL},
+# ${QWEN_API_KEY}, ${QWEN_MODEL_ID} from /etc/jd-bot/bridge.env on
+# install (see README.md step 5). nullclaw itself does NOT expand env
+# vars in its config file.
+ExecStart=/usr/local/bin/nullclaw daemon --config /home/jd-bot/.nullclaw/config.json
+Restart=on-failure
+RestartSec=5
+# Lock down: loopback-only daemon, no privilege ladder, no system write.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=true
+ReadWritePaths=/var/lib/jd-bot
+# nullclaw is ~678KB static Zig; cap memory anyway in case Qwen
+# responses pull large MCP payloads.
+MemoryMax=800M
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

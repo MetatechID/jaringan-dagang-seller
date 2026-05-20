@@ -1,0 +1,52 @@
+# jd-bot bridge — Caddy reverse-proxy snippet.
+#
+# DNS: bot.beliaman.com must A/AAAA-resolve to the bot VM's public IP
+# before this snippet is loaded; Caddy uses ACME-HTTP-01 to mint the
+# TLS cert on first connect.
+#
+# Install:
+#   sudo tee /etc/caddy/Caddyfile.d/jd-bot.caddy < caddyfile.snippet
+#   sudo systemctl reload caddy
+#
+# Or, if the host uses a single /etc/caddy/Caddyfile, append the block
+# below verbatim and reload.
+#
+# The shim listens on 127.0.0.1:8088 (jd-bot-bridge-http.service). Only
+# /ingest + /replies require Bearer auth (the shim enforces it); /health
+# is open and is what Caddy uses for its upstream healthcheck.
+
+bot.beliaman.com {
+	# Optional: tighten allowed methods. Vercel proxy only sends GET +
+	# POST; everything else is a misconfiguration.
+	@bad_method {
+		not method GET POST
+	}
+	respond @bad_method 405
+
+	reverse_proxy 127.0.0.1:8088 {
+		# Pass the Authorization header from the Vercel proxy through
+		# unchanged — the shim re-validates.
+		header_up Host {host}
+		header_up X-Forwarded-Proto {scheme}
+
+		# Modest timeouts. Ingest is fast (single contact INSERT);
+		# /replies is a small bounded SELECT. nullclaw work is async
+		# (worker-side), never on a request path.
+		transport http {
+			read_timeout 15s
+			dial_timeout 5s
+		}
+
+		# Healthcheck the upstream so Caddy can show a useful state.
+		health_uri /health
+		health_interval 30s
+		health_timeout 3s
+	}
+
+	# Caddy's default access log is JSON to stdout → journald.
+	log {
+		output stderr
+		format json
+		level INFO
+	}
+}

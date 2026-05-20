@@ -1,0 +1,35 @@
+{
+  "$comment": "nullclaw config template for jd-bot. Operator installs to /home/jd-bot/.nullclaw/config.json. Env-var placeholders (${...}) are substituted at unit-start by the systemd ExecStartPre rendering step documented in README.md. nullclaw itself does NOT expand env vars in this file.",
+  "version": "1",
+  "providers": [
+    {
+      "name": "qwen-vllm",
+      "type": "openai",
+      "base_url": "${QWEN_BASE_URL}",
+      "api_key": "${QWEN_API_KEY}"
+    }
+  ],
+  "models": {
+    "primary": {
+      "provider": "qwen-vllm",
+      "model": "${QWEN_MODEL_ID}"
+    }
+  },
+  "agents": {
+    "defaults": {
+      "model": "primary",
+      "mcp": {
+        "servers": {
+          "selling": {
+            "type": "http",
+            "url": "http://127.0.0.1:7801/mcp"
+          }
+        }
+      },
+      "system_file": "/opt/jd-bot/persona.md"
+    }
+  },
+  "channels": {
+    "cli": true
+  }
+}

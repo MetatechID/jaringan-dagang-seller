@@ -1,0 +1,33 @@
+[Unit]
+Description=jd-bot bridge worker (polls CRM for bot replies)
+Documentation=file:///opt/jd-bot/README.md
+After=network-online.target jd-bot-nullclaw.service jd-bot-bridge-http.service
+Wants=network-online.target
+Requires=jd-bot-nullclaw.service
+
+[Service]
+Type=simple
+User=jd-bot
+Group=jd-bot
+WorkingDirectory=/opt/jd-bot
+EnvironmentFile=/etc/jd-bot/bridge.env
+ExecStart=/opt/jd-bot/bridge.sh worker
+Restart=on-failure
+RestartSec=5
+# Lock down. /tmp is needed for per-conversation flock files (lock
+# files live in /tmp under jdbot-<conv_uuid>.lock); PrivateTmp gives
+# us our own namespace so they can't collide with anything else.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=true
+ReadWritePaths=/var/lib/jd-bot-bridge
+# Cap memory — psql + bash + a handful of subprocesses per tick. The
+# nullclaw process itself runs out of this unit but cgroup-accounts to
+# whatever launches it; here we just guard the worker shell.
+MemoryMax=400M
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target

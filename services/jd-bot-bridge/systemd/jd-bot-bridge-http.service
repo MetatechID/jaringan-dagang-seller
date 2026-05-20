@@ -1,0 +1,33 @@
+[Unit]
+Description=jd-bot bridge HTTP shim (ingest + replies on 127.0.0.1:8088)
+Documentation=file:///opt/jd-bot/README.md
+After=network-online.target jd-bot-nullclaw.service
+Wants=network-online.target
+Requires=jd-bot-nullclaw.service
+
+[Service]
+Type=simple
+User=jd-bot
+Group=jd-bot
+WorkingDirectory=/opt/jd-bot
+EnvironmentFile=/etc/jd-bot/bridge.env
+# Loopback only (BIND_HOST=127.0.0.1). Caddy reverse-proxies the
+# public TLS endpoint bot.beliaman.com here (see caddyfile.snippet).
+Environment=BIND_HOST=127.0.0.1
+Environment=PORT=8088
+ExecStart=/opt/jd-bot/bridge.sh http
+Restart=on-failure
+RestartSec=3
+# Lock down: no privilege escalation, strict filesystem, only the bridge
+# data directory is writable (for any future scratch state; today the
+# shim is stateless and writes nothing to disk).
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+PrivateTmp=true
+ReadWritePaths=/var/lib/jd-bot-bridge
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
