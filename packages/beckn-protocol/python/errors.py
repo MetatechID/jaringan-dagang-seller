@@ -189,6 +189,28 @@ ONDC_RETAIL_ERROR_CODES: dict[str, OndcErrorCode] = dict(
         _e("90003", OndcErrorClass.SELLER_APP, "Issue not found", "Referenced issue_id does not exist on the respondent side"),
         _e("90004", OndcErrorClass.SELLER_APP, "Issue already resolved", "Cannot update or re-open an Issue that is already in a terminal state"),
         _e("90005", OndcErrorClass.SELLER_APP, "Order not eligible", "Order state does not permit raising an Issue"),
+        # --- RSP (Reconciliation & Settlement Protocol) — 95xxx ---
+        # Mirrors ONDC-Official/protocol-network-extension @ release-1.0.0
+        # error_codes/rsp/ErrorCodes.yaml. v1 scope is the per-order
+        # settlement-record exchange; broader RSP error space (rail-level
+        # failures, NACH reject codes) is deferred with the actual money
+        # movement integration.
+        _e("95001", OndcErrorClass.SELLER_APP, "Invalid Settlement Record", "Settlement record could not be processed - invalid basis/window/counterparty"),
+        _e("95002", OndcErrorClass.SELLER_APP, "Order not eligible", "Order state does not permit raising a settlement record"),
+        _e("95003", OndcErrorClass.SELLER_APP, "Settlement already recorded", "A settlement record already exists for this order; cannot re-emit"),
+        _e("95004", OndcErrorClass.SELLER_APP, "Settlement amount mismatch", "Counterparty's computed settlement amount differs from sender's"),
+        _e("95005", OndcErrorClass.SELLER_APP, "Reconciliation window closed", "Settlement received after the reconciliation window has closed"),
+        # --- Rating — 70xxx ---
+        # Mirrors ONDC-Official/protocol-network-extension @ release-1.0.0
+        # error_codes/rating/ErrorCodes.yaml. Note 30015 ("Invalid rating
+        # value") and 50003 ("Unsupported rating category") above are the
+        # legacy in-band rating errors; the 70xxx range is the rating-
+        # dedicated bucket from the protocol-network-extension.
+        _e("70001", OndcErrorClass.SELLER_APP, "Invalid Rating", "Rating could not be processed - invalid category or out-of-range value"),
+        _e("70002", OndcErrorClass.SELLER_APP, "Rating not allowed", "Order state does not permit rating yet"),
+        _e("70003", OndcErrorClass.SELLER_APP, "Rating already submitted", "Buyer has already rated this order; updates not allowed in v1"),
+        _e("70004", OndcErrorClass.SELLER_APP, "Rating window closed", "Rating submitted after the post-fulfillment rating window closed"),
+        _e("70005", OndcErrorClass.SELLER_APP, "Unsupported rating category", "BPP does not accept ratings for the requested entity type"),
     ]
 )
 

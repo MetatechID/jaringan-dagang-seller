@@ -137,19 +137,28 @@ async def create_from_beckn_issue(
         return None
 
     # Idempotent on the BAP-issued issue_id: re-issue with same id is a
-    # no-op return of the existing RefundRequest. The bap_issue_id is
-    # stashed in seller_note as a stable correlation hook (no dedicated
-    # column yet — defer the schema bump until we have multi-issue
-    # support).
+    # no-op return of the existing RefundRequest.
+    #
+    # Task A6 promoted ``bap_issue_id`` to a dedicated indexed column.
+    # The lookup prefers the new column; the legacy seller_note /
+    # error stashes remain a transitional fallback for rows created
+    # before ``scripts/add-refund-bap-issue-id-column.py`` back-filled.
     existing = (await db.execute(
         select(RefundRequest)
         .where(RefundRequest.order_id == order.id)
         .where(
-            (RefundRequest.error == f"bap_issue_id={bap_issue_id}")
+            (RefundRequest.bap_issue_id == bap_issue_id)
+            | (RefundRequest.error == f"bap_issue_id={bap_issue_id}")
             | (RefundRequest.seller_note == f"bap_issue_id={bap_issue_id}")
         )
     )).scalar_one_or_none()
     if existing:
+        # Back-fill the dedicated column for legacy rows we find via the
+        # seller_note / error stash so subsequent reads use the indexed
+        # path. Cheap (no extra round-trip), idempotent.
+        if existing.bap_issue_id is None:
+            existing.bap_issue_id = bap_issue_id
+            await db.commit()
         return existing
 
     reason = _IGM_SUB_TO_REASON.get(sub_category, RefundReason.OTHER)
@@ -162,9 +171,11 @@ async def create_from_beckn_issue(
         reason_text=reason_text,
         requested_amount=amount,
         status=RefundStatus.PENDING,
-        # Stash the BAP-side issue id in seller_note so /respond can
-        # round-trip it on the outbound /on_issue. Using seller_note
-        # avoids a schema migration; revisit if we need richer state.
+        # Write to BOTH the dedicated indexed column AND seller_note. The
+        # latter is the A5-era back-compat path for any downstream reader
+        # that still parses the stash (Task A6 follow-up: remove once all
+        # readers migrate to the column).
+        bap_issue_id=bap_issue_id,
         seller_note=f"bap_issue_id={bap_issue_id}",
     )
     db.add(req)
@@ -389,12 +400,20 @@ async def respond_to_issue(
 
 
 def _extract_bap_issue_id(req: RefundRequest) -> str | None:
-    """Pull bap_issue_id back out of the seller_note stash.
+    """Pull bap_issue_id back out, preferring the dedicated column.
 
-    create_from_beckn_issue stores it as ``bap_issue_id=<uuid>`` in
-    seller_note; later /respond mutations may overwrite seller_note with
-    free-form reason text, so we tolerate both forms.
+    Task A6 added a dedicated ``RefundRequest.bap_issue_id`` indexed
+    column. Reads prefer it; if missing (pre-A6 rows that haven't yet
+    been back-filled by ``scripts/add-refund-bap-issue-id-column.py``)
+    we fall back to the A5-era ``seller_note=bap_issue_id=<uuid>``
+    stash, and finally the ``error`` stash (oldest format).
+
+    The seller_note + error fallbacks should be removed once the live
+    DB has been back-filled and we have observed zero non-column hits
+    for one settlement window (A6 follow-up).
     """
+    if req.bap_issue_id:
+        return req.bap_issue_id
     note = req.seller_note or ""
     if note.startswith("bap_issue_id="):
         return note.split("=", 1)[1].strip() or None

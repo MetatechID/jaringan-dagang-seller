@@ -41,6 +41,9 @@ from python import (
     ISSUE_CATEGORIES,
     ISSUE_SUB_CATEGORIES_ITEM,
     OrderState,
+    RATING_CATEGORIES,
+    SETTLEMENT_BASES,
+    SETTLEMENT_WINDOWS,
     build_fulfillment_ondc_tags,
     build_payment_settlement_tags,
 )
@@ -815,7 +818,7 @@ async def handle_update(
 
 
 # ======================================================================
-# handle_rating
+# handle_rating  (Task A6 — validate + persist + ack)
 # ======================================================================
 
 async def handle_rating(
@@ -823,15 +826,172 @@ async def handle_rating(
     message: dict[str, Any],
     db: AsyncSession,
 ) -> dict[str, Any]:
-    """Record a rating from the buyer."""
-    ratings = message.get("ratings", [])
-    # In a full implementation we would persist these ratings.
-    # For now, acknowledge receipt.
-    logger.info("Received %d rating(s)", len(ratings))
+    """Record a buyer rating, validate against ONDC v1 set, ack via /on_rating.
+
+    Validation rejects (returns 70001 DOMAIN-ERROR):
+      * Empty ratings list.
+      * rating_category outside RATING_CATEGORIES.
+      * Rating value that's not a number, or outside [1.0, 5.0].
+
+    For v1 we log + persist into ``BecknTransactionLog`` (the existing
+    inbound-log table already captures the full message body so we don't
+    need a dedicated Rating table on the seller side). The persisted log
+    is what a future v2 ranker reads.
+    """
+    ratings = message.get("ratings") or []
+    if not ratings:
+        return {
+            "context": _callback_context(context, "on_rating"),
+            "error": {
+                "type": "DOMAIN-ERROR",
+                "code": "70001",
+                "message": "ratings list is empty",
+            },
+        }
+
+    for r in ratings:
+        cat = r.get("rating_category") or r.get("category")
+        val = r.get("value")
+        if cat not in RATING_CATEGORIES:
+            return {
+                "context": _callback_context(context, "on_rating"),
+                "error": {
+                    "type": "DOMAIN-ERROR",
+                    "code": "70005",
+                    "message": f"unsupported rating_category {cat!r}",
+                },
+            }
+        if val is None:
+            return {
+                "context": _callback_context(context, "on_rating"),
+                "error": {
+                    "type": "DOMAIN-ERROR",
+                    "code": "70001",
+                    "message": "rating value is required",
+                },
+            }
+        try:
+            v = float(val)
+        except (TypeError, ValueError):
+            return {
+                "context": _callback_context(context, "on_rating"),
+                "error": {
+                    "type": "DOMAIN-ERROR",
+                    "code": "70001",
+                    "message": f"rating value {val!r} not parseable",
+                },
+            }
+        if not (1.0 <= v <= 5.0):
+            return {
+                "context": _callback_context(context, "on_rating"),
+                "error": {
+                    "type": "DOMAIN-ERROR",
+                    "code": "70001",
+                    "message": f"rating value {v} outside [1.0, 5.0]",
+                },
+            }
+
+    logger.info("Received %d valid rating(s) on order %s",
+                len(ratings), message.get("id"))
 
     return {
         "context": _callback_context(context, "on_rating"),
         "message": {"feedback_ack": True},
+    }
+
+
+# ======================================================================
+# handle_settle  (Task A6 — ONDC RSP /settle -> /on_settle)
+# ======================================================================
+
+async def handle_settle(
+    context: dict[str, Any],
+    message: dict[str, Any],
+    db: AsyncSession,
+) -> dict[str, Any]:
+    """Accept an ONDC RSP /settle, compute the settlement record, ack /on_settle.
+
+    The buyer (BAP) asks the BPP for a settlement record for a specific
+    order. The BPP computes the per-counterparty payable amount (paid
+    minus fees minus refunds), persists a ``SettlementLedger`` row, and
+    echoes back the record on /on_settle.
+
+    v1 doesn't move money — the ``settlement_status`` on the returned
+    record is ``NOT_PAID`` (or the persisted operator-flipped status if
+    the ledger row already exists). The operator settles out-of-band via
+    bank rails and flips the status manually.
+    """
+    from app.services import order_service, settlement_service
+
+    settlement_msg = message.get("settlement") or {}
+    order_id_str = settlement_msg.get("order_id") or ""
+    basis = settlement_msg.get("settlement_basis") or "DELIVERY"
+    window_obj = settlement_msg.get("settlement_window") or {}
+    window = window_obj.get("duration") if isinstance(window_obj, dict) else "P1D"
+    window = window or "P1D"
+
+    if basis not in SETTLEMENT_BASES:
+        return {
+            "context": _callback_context(context, "on_settle"),
+            "error": {
+                "type": "DOMAIN-ERROR",
+                "code": "95001",
+                "message": f"unknown settlement_basis {basis!r}",
+            },
+        }
+    if window not in SETTLEMENT_WINDOWS:
+        return {
+            "context": _callback_context(context, "on_settle"),
+            "error": {
+                "type": "DOMAIN-ERROR",
+                "code": "95001",
+                "message": f"unknown settlement_window {window!r}",
+            },
+        }
+
+    order = await order_service.get_order_by_beckn_id(db, order_id_str)
+    if order is None:
+        return {
+            "context": _callback_context(context, "on_settle"),
+            "error": {
+                "type": "DOMAIN-ERROR",
+                "code": "95002",
+                "message": f"Order {order_id_str} not found",
+            },
+        }
+
+    try:
+        record = await settlement_service.record_for_order(
+            db,
+            order_id=order.id,
+            settlement_basis=basis,
+            settlement_window=window,
+        )
+    except settlement_service.SettlementError as exc:
+        return {
+            "context": _callback_context(context, "on_settle"),
+            "error": {
+                "type": "DOMAIN-ERROR",
+                "code": "95001",
+                "message": str(exc),
+            },
+        }
+
+    # Stamp the BPP-side identity onto each counterparty so the BAP can
+    # verify the settlement against its registry expectations.
+    for cp in record["counterparties"]:
+        if cp.get("type") == "BPP":
+            cp["id"] = settings.BPP_SUBSCRIBER_ID
+            cp["uri"] = settings.BPP_SUBSCRIBER_URL
+
+    return {
+        "context": _callback_context(context, "on_settle"),
+        "message": {
+            "settlement": {
+                **record,
+                "settlement_reference": record.get("settlement_reference") or str(record["id"]),
+            }
+        },
     }
 
 

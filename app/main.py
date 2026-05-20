@@ -193,6 +193,7 @@ from app.api.customers import router as customers_router  # noqa: E402
 from app.api.insights import router as insights_router  # noqa: E402
 from app.api.webhooks import router as webhooks_router  # noqa: E402
 from app.api.refunds import router as refunds_router  # noqa: E402
+from app.api.score import router as score_router  # noqa: E402
 from app.api.admin import router as admin_router  # noqa: E402
 from app.api.imports import router as imports_router  # noqa: E402
 from app.api.me import router as me_router  # noqa: E402
@@ -213,6 +214,7 @@ app.include_router(stores_router, prefix="/api")
 app.include_router(customers_router, prefix="/api")
 app.include_router(insights_router, prefix="/api")
 app.include_router(refunds_router, prefix="/api")
+app.include_router(score_router, prefix="/api")
 app.include_router(admin_router, prefix="/api")
 app.include_router(imports_router, prefix="/api")
 app.include_router(me_router, prefix="/api")

@@ -71,6 +71,14 @@ class RefundRequest(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     decided_by: Mapped[str | None] = mapped_column(String(255), nullable=True)
     xendit_refund_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
     error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # ONDC IGM /issue correlation (added in Task A6 as the dedicated column
+    # to replace the A5-era ``seller_note=bap_issue_id=<uuid>`` stash; see
+    # ``scripts/add-refund-bap-issue-id-column.py`` for the back-fill).
+    # Reads should prefer this column; the seller_note stash remains a
+    # transitional fallback for rows that pre-date the back-fill.
+    bap_issue_id: Mapped[str | None] = mapped_column(
+        String(64), nullable=True, index=True
+    )
 
     order = relationship("Order")
 

@@ -70,10 +70,13 @@ from .fulfillment import (
     Person,
 )
 
-# Rating
+# Rating (envelope builders added in Task A6)
 from .rating import (
+    RATING_CATEGORIES,
     Rating,
     RatingCategory,
+    build_on_rating_envelope,
+    build_rating_envelope,
 )
 
 # Message envelopes
@@ -143,6 +146,29 @@ from .igm import (
     build_on_issue_envelope,
 )
 
+# ONDC RSP (Reconciliation & Settlement Protocol) v1 — settlement records
+from .rsp import (
+    SETTLEMENT_BASES,
+    SETTLEMENT_STATUSES,
+    SETTLEMENT_TYPES,
+    SETTLEMENT_WINDOWS,
+    SettlementCounterparty,
+    SettlementRecord,
+    SettlementWindow,
+    build_on_settle_envelope,
+    build_settle_envelope,
+)
+
+# ONDC Score (reputation) v1 — BPP-local snapshot + band mapping
+from .score import (
+    SCORE_ATTRIBUTES,
+    SCORE_BANDS,
+    Score,
+    ScoreAttribute,
+    ScoreAttributeWeights,
+    compute_score_band,
+)
+
 __all__ = [
     # Context
     "BecknAction",
@@ -190,9 +216,12 @@ __all__ = [
     "Gps",
     "Location",
     "Person",
-    # Rating
+    # Rating (envelope builders added in Task A6)
+    "RATING_CATEGORIES",
     "Rating",
     "RatingCategory",
+    "build_on_rating_envelope",
+    "build_rating_envelope",
     # Message envelopes
     "AckMessage",
     "AckResponse",
@@ -239,4 +268,21 @@ __all__ = [
     "RESPONDENT_ACTIONS",
     "build_issue_envelope",
     "build_on_issue_envelope",
+    # ONDC RSP (Reconciliation & Settlement Protocol) v1
+    "SETTLEMENT_BASES",
+    "SETTLEMENT_STATUSES",
+    "SETTLEMENT_TYPES",
+    "SETTLEMENT_WINDOWS",
+    "SettlementCounterparty",
+    "SettlementRecord",
+    "SettlementWindow",
+    "build_on_settle_envelope",
+    "build_settle_envelope",
+    # ONDC Score (reputation) v1
+    "SCORE_ATTRIBUTES",
+    "SCORE_BANDS",
+    "Score",
+    "ScoreAttribute",
+    "ScoreAttributeWeights",
+    "compute_score_band",
 ]

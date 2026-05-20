@@ -50,6 +50,11 @@ def _refund(*, status=RefundStatus.PENDING, bap_issue_id="issue-A"):
         decided_by=None,
         xendit_refund_id=None,
         error=None,
+        # A6 added the dedicated column; default to None so the test
+        # exercises the seller_note fallback path. The new round-trip
+        # test in tests/test_refund_bap_issue_id_column.py covers the
+        # dedicated-column happy path.
+        bap_issue_id=None,
         created_at=None,
         updated_at=None,
     )

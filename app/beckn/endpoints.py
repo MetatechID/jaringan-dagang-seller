@@ -225,6 +225,8 @@ _ACTION_HANDLERS = {
     "support": handlers.handle_support,
     # ONDC IGM (Task A5) — refund-request scope.
     "issue": handlers.handle_issue,
+    # ONDC RSP (Task A6) — settlement-record exchange.
+    "settle": handlers.handle_settle,
 }
 
 for _action, _handler in _ACTION_HANDLERS.items():
