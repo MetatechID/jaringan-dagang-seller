@@ -3,11 +3,18 @@
 The BAP POSTs the order snapshot here so it materializes in the seller's
 dashboard with full Beli Aman framing (badge + escrow status panel + verified
 buyer card). Auth is a shared secret in the X-Internal-Token header.
+
+Retirement gate (Task A4): when env ``BECKN_ORDER_FLOW=on``, the
+``POST /internal/escrow-orders`` route returns HTTP 410 Gone — the
+authoritative path is now Beckn ``/confirm``. Other modes (``off`` /
+``shadow`` / unset) keep the bridge working so the migration can land
+incrementally.
 """
 
 from __future__ import annotations
 
 import logging
+import os
 import uuid
 from decimal import Decimal
 from typing import Any
@@ -24,6 +31,11 @@ from app.models.store import Store
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/internal", tags=["internal"])
+
+
+def _bridge_retired() -> bool:
+    """True iff ``BECKN_ORDER_FLOW=on`` — bridge endpoint must respond 410."""
+    return (os.environ.get("BECKN_ORDER_FLOW") or "").strip().lower() == "on"
 
 
 class EscrowOrderBuyer(BaseModel):
@@ -76,7 +88,19 @@ DEMO_STORE_ID = uuid.UUID("00000000-0000-0000-0000-000000000001")
 async def create_escrow_order(
     body: EscrowOrderIn, db: AsyncSession = Depends(get_db)
 ) -> dict[str, Any]:
-    """Materialize a Beli Aman order in the seller dashboard."""
+    """Materialize a Beli Aman order in the seller dashboard.
+
+    Returns 410 Gone when ``BECKN_ORDER_FLOW=on`` (Task A4): the BAP must
+    use Beckn ``/confirm`` instead of this legacy internal HTTP route.
+    """
+    if _bridge_retired():
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail=(
+                "The /internal/escrow-orders bridge is retired. "
+                "Use Beckn /confirm (BECKN_ORDER_FLOW=on)."
+            ),
+        )
     try:
         return await _create_escrow_order_impl(body, db)
     except HTTPException:

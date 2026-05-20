@@ -32,6 +32,12 @@ class PaymentRecord(UUIDPrimaryKeyMixin, TimestampMixin, Base):
     xendit_invoice_id: Mapped[str | None] = mapped_column(
         String(255), nullable=True, index=True
     )
+    # Xendit-hosted hosted-checkout URL (also serves as the QR landing page
+    # for QRIS). Surfaced to the BAP in /on_confirm so the buyer storefront
+    # can render a "Pay with QR" panel without scraping Xendit response.
+    xendit_invoice_url: Mapped[str | None] = mapped_column(
+        String(1024), nullable=True
+    )
     xendit_payment_id: Mapped[str | None] = mapped_column(
         String(255), nullable=True
     )

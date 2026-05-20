@@ -83,6 +83,7 @@ async def create_invoice(
     payment = PaymentRecord(
         order_id=order_id,
         xendit_invoice_id=xendit_invoice_id,
+        xendit_invoice_url=invoice_url,
         amount=amount,
         status=PaymentStatus.PENDING,
     )

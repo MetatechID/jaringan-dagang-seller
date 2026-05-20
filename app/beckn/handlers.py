@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
 from app.beckn.catalog_builder import BecknCatalogBuilder
+from app.beckn.quote_token import build_quote_token, verify_quote_token
 from app.config import settings
 from app.models.order import Order, OrderStatus
 from app.models.product import Product, ProductStatus
@@ -298,6 +299,14 @@ async def handle_init(
         },
     )
 
+    # Issue a 10-min signed quote_token covering the (items, total) the buyer
+    # is about to commit to (spec § 6.1). The BAP echoes it back on /confirm
+    # so we can refuse stale quotes.
+    quote_items_for_token = [
+        {"sku_id": str(s.id), "qty": q} for s, q in items_with_qty
+    ]
+    token = build_quote_token(items=quote_items_for_token, total=total)
+
     return {
         "context": _callback_context(context, "on_init"),
         "message": {
@@ -323,6 +332,12 @@ async def handle_init(
                         "status": "NOT-PAID",
                     }
                 ],
+                "tags": [
+                    {
+                        "code": "quote_token",
+                        "list": [{"code": "value", "value": token}],
+                    }
+                ],
             }
         },
     }
@@ -343,6 +358,29 @@ async def handle_confirm(
     """
     order_msg = message.get("order", {})
     order_id_str = order_msg.get("id")
+
+    # Extract buyer-echoed quote_token (spec § 6.1). For now this is
+    # observability-only — a mismatch is logged but doesn't reject. We'll
+    # tighten to a hard reject in a follow-up once the BAP reliably echoes
+    # the token from /on_init.
+    echoed_quote_token: str | None = None
+    for tag in order_msg.get("tags") or []:
+        if tag.get("code") == "quote_token":
+            for kv in tag.get("list") or []:
+                if (kv.get("code") or "").lower() == "value":
+                    echoed_quote_token = kv.get("value")
+                    break
+            if echoed_quote_token:
+                break
+    if echoed_quote_token:
+        # Verify only signature + expiry; defer items/total check until we
+        # have the resolved order (below).
+        ok, err = verify_quote_token(echoed_quote_token)
+        if not ok:
+            logger.warning(
+                "quote_token check soft-failed for order %s: %s",
+                order_id_str, err,
+            )
 
     order = await order_service.get_order_by_beckn_id(db, order_id_str)
     if order is None:
@@ -468,6 +506,22 @@ async def handle_confirm(
 
     _ctx = _callback_context(context, "on_confirm")
     _ctx["bpp_id"] = _store_subscriber_id   # per-toko identity
+
+    # Surface Xendit QRIS QR/checkout URL to the BAP per spec § 6.1.
+    # The buyer storefront uses this to render the "Pay with QR" panel
+    # without scraping the Xendit invoice response.
+    _payment_params: dict[str, Any] = {
+        "transaction_id": payment_record.xendit_invoice_id,
+        "amount": str(payment_record.amount),
+        "currency": "IDR",
+    }
+    _invoice_url = getattr(payment_record, "xendit_invoice_url", None)
+    if _invoice_url:
+        _payment_params["invoice_url"] = _invoice_url
+        # Xendit's hosted invoice page also serves as the QR landing
+        # page for QRIS payments; reuse the same URL.
+        _payment_params["qr_image_url"] = _invoice_url
+
     return {
         "context": _ctx,
         "message": {
@@ -492,11 +546,7 @@ async def handle_confirm(
                         "type": "PRE-FULFILLMENT",
                         "collected_by": "BPP",
                         "status": "NOT-PAID",
-                        "params": {
-                            "transaction_id": payment_record.xendit_invoice_id,
-                            "amount": str(payment_record.amount),
-                            "currency": "IDR",
-                        },
+                        "params": _payment_params,
                         "tags": _ondc_payment_tags() or None,
                     }
                 ],
