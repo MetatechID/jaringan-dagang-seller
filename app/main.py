@@ -99,6 +99,30 @@ async def lifespan(app: FastAPI):
         except Exception:
             logger.warning("Could not connect to database (skipping table creation)", exc_info=True)
 
+    # Defensive idempotent schema reconciliation for recently-added columns.
+    # The models drift ahead of live Neon when scripts/add-*-column.py
+    # haven't been --apply'd yet — and a missing column makes the SELECT
+    # crash, surfacing as opaque 500s on whatever endpoint queries that
+    # table first (e.g. /api/stores → 500 when stores.image_base_url is
+    # missing from A7). ALTER TABLE ... ADD COLUMN IF NOT EXISTS is fast
+    # and safe on Postgres 9.6+; running it on every cold start adds at
+    # most a few ms once the columns exist. Each new column added by a
+    # later migration script SHOULD also be added here so prod boots clean.
+    _COLUMN_RECONCILE = [
+        ("stores", "image_base_url", "VARCHAR(512)"),       # A7
+        ("payments", "xendit_invoice_url", "VARCHAR(1024)"),  # A4
+    ]
+    try:
+        from sqlalchemy import text as _sql_text
+        async with engine.begin() as conn:
+            for tbl, col, coltype in _COLUMN_RECONCILE:
+                await conn.execute(_sql_text(
+                    f"ALTER TABLE {tbl} ADD COLUMN IF NOT EXISTS {col} {coltype}"
+                ))
+        logger.info("Schema reconciled (%d columns checked)", len(_COLUMN_RECONCILE))
+    except Exception:
+        logger.warning("Schema reconciliation skipped (DB unavailable?)", exc_info=True)
+
     await _register_with_registry()
 
     yield
